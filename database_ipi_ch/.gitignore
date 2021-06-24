@@ -1,6 +1,7 @@
 # project based ignore files or folders 
 output/
-.output.json
+output.json
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

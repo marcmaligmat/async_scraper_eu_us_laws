@@ -6,8 +6,8 @@ from time import sleep
 pretty.install()
 
 # Results = PAGE_SIZE * LOOP
-PAGE_SIZE = 64
-LOOP = 10 
+PAGE_SIZE = 8
+LOOP = 1 
 
 def post_data(items_size,cursor):
     """Cursor is needed to get the next results"""

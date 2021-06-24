@@ -1,6 +1,6 @@
 # project based ignore files or folders 
 output/
-output.json
+.output.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

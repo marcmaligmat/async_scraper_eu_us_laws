@@ -1,27 +1,98 @@
-import requests
+import base64
 import json
-from rich import pretty
-from rich import inspect
 from time import sleep
+
+import re
+import requests
+from rich import inspect, pretty
+from rich.progress import Progress
+from rich.live import Live
+
+from post_data import post_data_from_oldest
 pretty.install()
 
 # Results = PAGE_SIZE * LOOP
-PAGE_SIZE = 8
-LOOP = 1 
+PAGE_SIZE = 64 #use 64 as default
+LOOP = 500
+OUTPUT_FILE = 'output.jsonl'
+LAST_CURSOR_FILE = 'last_cursor.jsonl'
 
-def post_data(items_size,cursor):
-    """Cursor is needed to get the next results"""
-    return {"~#resultmeta":{"~:page-items": items_size,"~:total-items":941482,"~:max-score":{"~#opt":1.0},"~:cursor":{"~#opt":cursor},"~:processing-time":{"~#millis":206},"~:query":{"~#query":{"~:target":{"~#queryTarget":"chmarke"},"~:page-size":items_size,"~:extra-params":{"~#lmm":{"qf":["titel__type_text^6.0 wortbestandteil__type_text^5.0 markennummer__type_int^4.0 markennummer_formatiert__type_string^4.0 gesuchsnummer__type_text_split_num^3.0 ra_inhaber__type_text_mv^2.0 ra_vertreter__type_text_mv^1.0 wdltext__type_text^1.0 wdlklassennummer__type_text_mv^1.0 markennummer__type_text_split_num^4.0"]}},"~:select":[{"~#field":"datastore_checksum__type_string"},{"~#field":"verfahrenssprache__type_string"},{"~#field":{"~:name":"ra_unterlizenznehmer__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"markennummer_formatiert__type_string","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"_version_","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SYNTHETIC"}]}}},{"~#field":{"~:name":"loeschgrund__type_i18n","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":{"~:name":"ra_nutzniesser__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":"erneuertemarke__type_boolean"},{"~#field":"quelleersteveroeffentlichung_publikationsziel__type_i18n"},{"~#field":{"~:name":"verkehrsdurchsetzung__type_boolean","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":{"~:name":"schutztitelstadium__type_i18n","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":"verfahrenssprache__type_i18n"},{"~#field":"wdl__type_text_mv"},{"~#field":{"~:name":"loeschdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":{"~:name":"publikationsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":"quelleersteveroeffentlichung_ausgabe__type_string"},{"~#field":{"~:name":"officeorigincode__type_string","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":"verkehrsdurchsetzung__type_i18n"},{"~#field":{"~:name":"hinterlegungsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":"farbanspruch__type_text"},{"~#field":{"~:name":"doctype","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":{"~:name":"ra_pfandnehmer__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"ipikontoid__type_string","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":{"~:name":"eintragungsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":{"~:name":"ra_vertreter__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":"bild_screen_hash__type_string_mv"},{"~#field":"markennummer__type_int"},{"~#field":{"~:name":"schutztiteltyp__type_i18n","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":"spezialmarken__type_i18n_mv"},{"~#field":{"~:name":"anmeldereferenz__type_text","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"}]}}},{"~#field":"markennummer__type_text_split_num"},{"~#field":{"~:name":"markenart__type_i18n","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":{"~:name":"score","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SYNTHETIC"}]}}},{"~#field":{"~:name":"ra_designer__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"farbanspruch__type_boolean","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":"bild_thumbnail_hash__type_string_mv"},{"~#field":{"~:name":"ra_teillizenznehmer__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"ra_erfinder__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":"id"},{"~#field":{"~:name":"gesuchsnummer__type_text_split_num","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":"wdlklassennummernformatiert__type_string"},{"~#field":{"~:name":"wdltext__type_text","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"ra_ausschliesslichelizenznehmer__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":"markentyp__type_i18n"},{"~#field":"indextime"},{"~#field":{"~:name":"ra_betreibungsamt__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"ra_verfuegungsbeschraenker__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"schutzablaufdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":{"~:name":"ra_konkursamt__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"titel__type_text","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"schutztitelstatus__type_i18n","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":"createtime__type_date"},{"~#field":"changetime__type_date"},{"~#field":"datastore_timestamp__type_date"},{"~#field":{"~:name":"ra_inhaber__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"markentyp__type_i18n_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#field":{"~:name":"wortbestandteil__type_text","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":"bild_print_hash__type_string_mv"},{"~#field":{"~:name":"ra_lizenznehmer__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/MULTI"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}},{"~#field":{"~:name":"wdlklassennummer__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}}],"~:sort":[{"~#tpl":[{"~#field":{"~:name":"eintragungsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},{"~#enum":"~:ch.ipi.search.common.backend.query.SortOrder/DESC"}]},{"~#tpl":[{"~#field":"id"},{"~#enum":"~:ch.ipi.search.common.backend.query.SortOrder/DESC"}]}],"~:meta":{"~#lmm":{"session":["R5c156814"],"remote-addr":["202.137.119.4"]}},"~:cursor":{"~#opt":"*"},"~:count-values":[{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"loeschgrund__type_i18n","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}}},{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"verkehrsdurchsetzung__type_boolean","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}}},{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"schutztitelstadium__type_i18n","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}}},{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"officeorigincode__type_string","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}}},{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"doctype","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}}},{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"ipikontoid__type_string","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}}},{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"schutztiteltyp__type_i18n","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}}},{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"markenart__type_i18n","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}}},{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"farbanspruch__type_boolean","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}}},{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"schutztitelstatus__type_i18n","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}}},{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"markentyp__type_i18n_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}}},{"~:include-non-matched?":True,"~:min-count":{"~#opt":0},"~:field":{"~#field":{"~:name":"wdlklassennummer__type_text_mv","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/SNIPPETABLE"}]}}}}],"~:count-queries":[{"~:key":{"~#opt":"loeschdatum__type_date#LAST_WEEK"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"loeschdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-7DAYS/DAY TO NOW]"},{"~:key":{"~#opt":"loeschdatum__type_date#LAST_MONTH"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"loeschdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-1MONTHS/DAY TO NOW]"},{"~:key":{"~#opt":"loeschdatum__type_date#LAST_YEAR"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"loeschdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-1YEARS/DAY TO NOW]"},{"~:key":{"~#opt":"loeschdatum__type_date#ALL"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"loeschdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[* TO *]"},{"~:key":{"~#opt":"publikationsdatum__type_date#LAST_WEEK"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"publikationsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-7DAYS/DAY TO NOW]"},{"~:key":{"~#opt":"publikationsdatum__type_date#LAST_MONTH"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"publikationsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-1MONTHS/DAY TO NOW]"},{"~:key":{"~#opt":"publikationsdatum__type_date#LAST_YEAR"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"publikationsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-1YEARS/DAY TO NOW]"},{"~:key":{"~#opt":"publikationsdatum__type_date#ALL"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"publikationsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/NULLABLE"},{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[* TO *]"},{"~:key":{"~#opt":"hinterlegungsdatum__type_date#LAST_WEEK"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"hinterlegungsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-7DAYS/DAY TO NOW]"},{"~:key":{"~#opt":"hinterlegungsdatum__type_date#LAST_MONTH"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"hinterlegungsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-1MONTHS/DAY TO NOW]"},{"~:key":{"~#opt":"hinterlegungsdatum__type_date#LAST_YEAR"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"hinterlegungsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-1YEARS/DAY TO NOW]"},{"~:key":{"~#opt":"hinterlegungsdatum__type_date#ALL"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"hinterlegungsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[* TO *]"},{"~:key":{"~#opt":"eintragungsdatum__type_date#LAST_WEEK"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"eintragungsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-7DAYS/DAY TO NOW]"},{"~:key":{"~#opt":"eintragungsdatum__type_date#LAST_MONTH"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"eintragungsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-1MONTHS/DAY TO NOW]"},{"~:key":{"~#opt":"eintragungsdatum__type_date#LAST_YEAR"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"eintragungsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-1YEARS/DAY TO NOW]"},{"~:key":{"~#opt":"eintragungsdatum__type_date#ALL"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"eintragungsdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[* TO *]"},{"~:key":{"~#opt":"schutzablaufdatum__type_date#LAST_WEEK"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"schutzablaufdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-7DAYS/DAY TO NOW]"},{"~:key":{"~#opt":"schutzablaufdatum__type_date#LAST_MONTH"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"schutzablaufdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-1MONTHS/DAY TO NOW]"},{"~:key":{"~#opt":"schutzablaufdatum__type_date#LAST_YEAR"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"schutzablaufdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[NOW-1YEARS/DAY TO NOW]"},{"~:key":{"~#opt":"schutzablaufdatum__type_date#ALL"},"~:include-non-matched?":True,"~:field":{"~#field":{"~:name":"schutzablaufdatum__type_date","~:meta":{"~#set":[{"~#enum":"~:ch.ipi.search.common.backend.query.FieldMetadata$Flag/FACETABLE"}]}}},"~:constraint":"[* TO *]"}]}}}}
 
-def send_post(cursor):
+
+
+
+total = 100 
+NUM = 0
+
+def generate_string(num1):
+    return f"Scraped {num1} / {PAGE_SIZE * LOOP} "
+
+
+def print_scraped_number(num):
+    with Live(generate_string(num), refresh_per_second=4) as live:
+        live.update(generate_string(num))
+        num += PAGE_SIZE
+
+
+def run(session):
+    cursor = {
+        'last_cursor':'*',
+        'page_number': 0,
+        'expected_results': 0
+    }
+    num = 0
+    # with Progress() as progress:
+    #     task = progress.add_task(f"[cyan]Scraping...", total=LOOP)
+        
+    with Live(generate_string(num), refresh_per_second=4) as live:
+        for i in range(LOOP):
+            try:
+                cursor = get_last_cursor_object()
+            except:
+                save_last_cursor(cursor)
+
+            response = send_post(session,cursor['last_cursor'])
+            api_results = response.json()['results']
+
+            for result in api_results:
+                if "bild_screen_hash__type_string_mv" in result.keys():
+                    result['base64_logo'] = [base64_decoded_utf8(result["bild_screen_hash__type_string_mv"][0])]
+                handle_jsonl('a+', result, OUTPUT_FILE)
+
+
+            cursor = {
+                'last_cursor':get_next_cursor(response),
+                'page_number': cursor['page_number'] + 1,
+                'expected_results': cursor['expected_results'] + PAGE_SIZE
+            }
+            save_last_cursor(cursor)
+
+            # if not progress.finished:
+            #     progress.update(task, advance = 1)
+
+            num += PAGE_SIZE
+            live.update(generate_string(num))
+            
+
+            sleep(2)
+
+
+
+
+def send_post(session,cursor):
     headers = {
         'content-type': 'application/transit+json',
-        'X-IPI-VERSION': '2.0.0',
+        'X-IPI-VERSION': '2.1.3',
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36'
     }
-    s = requests.Session()
-    response = s.post(f'https://database.ipi.ch/database/resources/query/fetch?ps={PAGE_SIZE}', headers=headers, json=post_data(PAGE_SIZE,cursor))
+    
+    response = session.post(
+        f'https://database.ipi.ch/database/resources/query/fetch?ps={PAGE_SIZE}', 
+        headers=headers, 
+        json=post_data_from_oldest(PAGE_SIZE,cursor))
+
     return response
+
 
 def get_next_cursor(response):
     cursor_result = response.json()['metadataAsTransit']
@@ -29,28 +100,50 @@ def get_next_cursor(response):
     return json.loads(cursor)['~#resultmeta']['~:cursor']['~#opt']
 
 
-def run():
-    cursor = "*"
+def base64_decoded_utf8(image_slug):
+    url = f"https://database.ipi.ch/database/resources/image/{image_slug}"
+    base64_encoded_data = base64.b64encode(requests.get(url).content)
+    return base64_encoded_data.decode('utf-8')
 
-    response = send_post(cursor)
-    api_result = response.json()['results']
-    results = [{'last_cursor': cursor}]
-    results.append({'results':api_result})
 
-    for i in range(LOOP-1):
-        
-        cursor = get_next_cursor(response)
-        response = send_post(cursor)
+def transform_to_image(base64_img):
+    base64_img_bytes = base64_img.encode('UTF-8') 
+    with open('decoded_image.png', 'wb') as file_to_save:
+        decoded_image_data = base64.decodebytes(base64_img_bytes)
+        file_to_save.write(decoded_image_data)
 
-        api_result = response.json()['results']
-        results.append({'results':api_result})
-        results[0] = {'last_cursor': cursor}
-        sleep(2)
 
-    with open('output.json', 'w',encoding ='utf8') as outfile:
-        json.dump(results, outfile,ensure_ascii=False, indent=4)
+def save_last_cursor(last_cursor):
+    handle_jsonl('w+',last_cursor, LAST_CURSOR_FILE)
 
+
+def open_last_cursor():
+    f = open("last_cursor.txt", "r")
+    words = f.read()
+    m = re.search(r'last_cursor:(.+)',words)
+    return m.group(1)
+
+
+def handle_jsonl(mode, json_data, output_file):
+    """ Example mode: 'w+','a+' """
+    with open(output_file, mode) as outfile:
+        json.dump(json_data, outfile,ensure_ascii=False, indent=4)
+        outfile.write('\n')
+
+
+def get_last_cursor_object():
+    """Returns a dictionary from last_cursor.jsonl file"""
+    with open('last_cursor.jsonl', 'r') as json_file:
+        json_list = list(json_file)
+        last_cursor_object = ''
+
+        for _list in json_list:
+            _dict = _list.splitlines()
+            last_cursor_object += _dict[0]
+
+        return json.loads(last_cursor_object)
 
 if __name__ == '__main__':
-    run()
+    session = requests.Session()
+    run(session)
 

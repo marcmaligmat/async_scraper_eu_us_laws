@@ -6,6 +6,7 @@ output.jsonl
 test.py
 last_cursor.txt
 decoded_image.png
+last_cursor.jsonl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -13,7 +13,7 @@ pretty.install()
 
 # Results = PAGE_SIZE * LOOP
 PAGE_SIZE = 64 #use 64 as default
-LOOP = 500
+LOOP = 2
 OUTPUT_FILE = 'output.jsonl'
 LAST_CURSOR_FILE = 'last_cursor.jsonl'
 
@@ -126,9 +126,11 @@ def open_last_cursor():
 
 def handle_jsonl(mode, json_data, output_file):
     """ Example mode: 'w+','a+' """
-    with open(output_file, mode) as outfile:
-        json.dump(json_data, outfile,ensure_ascii=False, indent=4)
-        outfile.write('\n')
+    with open(output_file, mode) as f:
+        f.write(json.dumps(json_data) + '\n')
+        # json.dump(json_data, outfile,ensure_ascii=False, indent=4)
+        # outfile.write('\n')
+        
 
 
 def get_last_cursor_object():

@@ -12,8 +12,8 @@ from post_data import post_data_from_oldest
 pretty.install()
 
 # Results = PAGE_SIZE * LOOP
-PAGE_SIZE = 8 #use 64 as default
-LOOP = 1
+PAGE_SIZE = 64 #use 64 as default
+LOOP = 500
 OUTPUT_FILE = 'output.jsonl'
 LAST_CURSOR_FILE = 'last_cursor.jsonl'
 

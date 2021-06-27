@@ -12,8 +12,8 @@ from post_data import post_data_from_oldest
 pretty.install()
 
 # Results = PAGE_SIZE * LOOP
-PAGE_SIZE = 64 #use 64 as default
-LOOP = 2
+PAGE_SIZE = 8 #use 64 as default
+LOOP = 1
 OUTPUT_FILE = 'output.jsonl'
 LAST_CURSOR_FILE = 'last_cursor.jsonl'
 
@@ -45,36 +45,39 @@ def run(session):
     #     task = progress.add_task(f"[cyan]Scraping...", total=LOOP)
         
     with Live(generate_string(num), refresh_per_second=4) as live:
-        for i in range(LOOP):
-            try:
-                cursor = get_last_cursor_object()
-            except:
+        with open(OUTPUT_FILE, 'a+') as f:
+        
+            for _ in range(LOOP):
+                try:
+                    cursor = get_last_cursor_object()
+                except:
+                    save_last_cursor(cursor)
+
+                response = send_post(session,cursor['last_cursor'])
+                api_results = response.json()['results']
+
+                results = '';
+                for result in api_results:
+                    
+                    if "bild_screen_hash__type_string_mv" in result.keys():
+                        result['base64_logo'] = [base64_decoded_utf8(result["bild_screen_hash__type_string_mv"][0])]
+                    results += json.dumps(result) + '\n'
+                    
+
+                    num += 1
+                    live.update(generate_string(num))
+                f.write(results)
+
+                cursor = {
+                    'last_cursor':get_next_cursor(response),
+                    'page_number': cursor['page_number'] + 1,
+                    'expected_results': cursor['expected_results'] + PAGE_SIZE
+                }
                 save_last_cursor(cursor)
 
-            response = send_post(session,cursor['last_cursor'])
-            api_results = response.json()['results']
-
-            for result in api_results:
-                if "bild_screen_hash__type_string_mv" in result.keys():
-                    result['base64_logo'] = [base64_decoded_utf8(result["bild_screen_hash__type_string_mv"][0])]
-                handle_jsonl('a+', result, OUTPUT_FILE)
-
-
-            cursor = {
-                'last_cursor':get_next_cursor(response),
-                'page_number': cursor['page_number'] + 1,
-                'expected_results': cursor['expected_results'] + PAGE_SIZE
-            }
-            save_last_cursor(cursor)
-
-            # if not progress.finished:
-            #     progress.update(task, advance = 1)
-
-            num += PAGE_SIZE
-            live.update(generate_string(num))
-            
-
-            sleep(2)
+                # if not progress.finished:
+                #     progress.update(task, advance = 1)
+                f.close()
 
 
 

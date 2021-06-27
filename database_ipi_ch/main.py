@@ -23,6 +23,7 @@ def generate_string(num1,last_expected_results):
 
 
 def run(session):
+    print('Initializing')
     cursor = {
         'last_cursor':'*',
         'page_number': 0,

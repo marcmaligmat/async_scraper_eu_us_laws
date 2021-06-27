@@ -13,25 +13,13 @@ pretty.install()
 
 # Results = PAGE_SIZE * LOOP
 PAGE_SIZE = 64 #use 64 as default
-LOOP = 500
+LOOP = 1000
 OUTPUT_FILE = 'output.jsonl'
 LAST_CURSOR_FILE = 'last_cursor.jsonl'
 
 
-
-
-
-total = 100 
-NUM = 0
-
-def generate_string(num1):
-    return f"Scraped {num1} / {PAGE_SIZE * LOOP} "
-
-
-def print_scraped_number(num):
-    with Live(generate_string(num), refresh_per_second=4) as live:
-        live.update(generate_string(num))
-        num += PAGE_SIZE
+def generate_string(num1,last_expected_results):
+    return f"Scraped {num1} / {(PAGE_SIZE * LOOP) + last_expected_results} "
 
 
 def run(session):
@@ -41,31 +29,32 @@ def run(session):
         'expected_results': 0
     }
     num = 0
-    # with Progress() as progress:
-    #     task = progress.add_task(f"[cyan]Scraping...", total=LOOP)
-        
-    with Live(generate_string(num), refresh_per_second=4) as live:
+    original_expected_results = 0
+    
+
+    try:
+        cursor = get_last_cursor_object()
+        num = cursor['expected_results']
+        original_expected_results = cursor['expected_results']
+    except:
+        save_last_cursor(cursor)
+
+    with Live() as live:
         with open(OUTPUT_FILE, 'a+') as f:
         
             for _ in range(LOOP):
-                try:
-                    cursor = get_last_cursor_object()
-                except:
-                    save_last_cursor(cursor)
-
                 response = send_post(session,cursor['last_cursor'])
                 api_results = response.json()['results']
 
                 results = '';
                 for result in api_results:
-                    
                     if "bild_screen_hash__type_string_mv" in result.keys():
                         result['base64_logo'] = [base64_decoded_utf8(result["bild_screen_hash__type_string_mv"][0])]
                     results += json.dumps(result) + '\n'
                     
 
                     num += 1
-                    live.update(generate_string(num))
+                    live.update(generate_string(num,original_expected_results))
                 f.write(results)
 
                 cursor = {
@@ -75,9 +64,7 @@ def run(session):
                 }
                 save_last_cursor(cursor)
 
-                # if not progress.finished:
-                #     progress.update(task, advance = 1)
-                f.close()
+        f.close()
 
 
 

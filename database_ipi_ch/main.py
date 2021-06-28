@@ -26,17 +26,9 @@ flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
 flags.DEFINE_string('last_cursor_file', 'last_cursor.jsonl', 'Last cursor file')
 
 
-
-
 class Database_ipi_ch():
-    def __init__(self):
-        console.print("Initializing!", style="green on black")
-        app.run(self.main)
-
-    def main(self, argv):
+    def scrape(self):
         self.session = requests.Session()
-        if FLAGS.debug:
-            print('non-flag arguments:', argv)
         self.page_size = FLAGS.page_size
 
         self.output_file = FLAGS.output_file
@@ -155,6 +147,9 @@ class Database_ipi_ch():
 
             return json.loads(last_cursor_object)
 
+def main(_):
+    console.print("Initializing!", style="green on black")
+    Database_ipi_ch().scrape()
 
 if __name__ == '__main__':
-    Database_ipi_ch()
+    app.run(main)

@@ -78,8 +78,6 @@ class Database_ipi_ch():
                     }
                     self.save_last_cursor(cursor)
 
-            f.close()
-
     def generate_string(self, num1):
         return f"Scraped {num1} / {self.total_items} "
 

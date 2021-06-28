@@ -53,29 +53,30 @@ class Database_ipi_ch():
             (self.total_items-cursor['expected_results'])/self.page_size)
 
         with Live() as live:
-            with open(self.output_file, 'a+') as f:
+            try:
+                with open(self.output_file, 'a+') as f:
+                    for _ in range(self.loop):
+                        self.send_post(cursor['last_cursor'])
+                        api_results = self.response.json()['results']
 
-                for _ in range(self.loop):
-                    self.send_post(cursor['last_cursor'])
-                    api_results = self.response.json()['results']
+                        results = ''
+                        for result in api_results:
+                            if "bild_screen_hash__type_string_mv" in result.keys():
+                                result['base64_logo'] = [self.base64_decoded_utf8(
+                                    result["bild_screen_hash__type_string_mv"][0])]
+                            results += json.dumps(result) + '\n'
 
-                    results = ''
-                    for result in api_results:
-                        if "bild_screen_hash__type_string_mv" in result.keys():
-                            result['base64_logo'] = [self.base64_decoded_utf8(
-                                result["bild_screen_hash__type_string_mv"][0])]
-                        results += json.dumps(result) + '\n'
+                            num += 1
+                            live.update(self.generate_string(num))
+                        f.write(results)
 
-                        num += 1
-                        live.update(self.generate_string(num))
-                    f.write(results)
-
-                    cursor = {
-                        'last_cursor': self.get_next_cursor(),
-                        'page_number': cursor['page_number'] + 1,
-                        'expected_results': cursor['expected_results'] + self.page_size
-                    }
-                    self.save_last_cursor(cursor)
+                        cursor = {
+                            'last_cursor': self.get_next_cursor(),
+                            'page_number': cursor['page_number'] + 1,
+                            'expected_results': cursor['expected_results'] + self.page_size
+                        }
+            finally:
+                self.save_last_cursor(cursor)
 
     def generate_string(self, num1):
         return f"Scraped {num1} / {self.total_items} "

@@ -21,8 +21,7 @@ pretty.install()
 
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
-flags.DEFINE_enum('page_size', '64', [
-                  '8', '16', '32', '64'], 'Number of results for each page.', short_name='ps')
+flags.DEFINE_integer('page_size', 64, 'Number of results for each page.', short_name='ps')
 flags.DEFINE_string('output_file', 'output.jsonl',
                     'Name of the file.', short_name='of')
 flags.DEFINE_string('output_dir', 'output.jsonl',
@@ -41,7 +40,7 @@ class Database_ipi_ch():
         self.session = requests.Session()
         if FLAGS.debug:
             print('non-flag arguments:', argv)
-        self.page_size = int(FLAGS.page_size)
+        self.page_size = FLAGS.page_size
 
 
         if FLAGS.output_dir != 'output.jsonl':

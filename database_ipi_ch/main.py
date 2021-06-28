@@ -23,7 +23,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
 flags.DEFINE_integer('page_size', 64, 'Number of results for each page.')
 flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
-flags.DEFINE_string('last_cursor_file', 'last_cursor.jsonl', 'Last cursor file')
+flags.DEFINE_string('last_cursor_file', 'last_cursor.json', 'Last cursor file')
 
 
 class Database_ipi_ch():
@@ -120,26 +120,14 @@ class Database_ipi_ch():
             file_to_save.write(decoded_image_data)
 
     def save_last_cursor(self, last_cursor):
-        self.handle_jsonl('w+', last_cursor, FLAGS.last_cursor_file)
-
-    def handle_jsonl(self, mode, json_data, output_file):
-        """ Example mode: 'w+','a+' """
-        with open(output_file, mode) as f:
-            f.write(json.dumps(json_data) + '\n')
-            # json.dump(json_data, outfile,ensure_ascii=False, indent=4)
-            # outfile.write('\n')
+        with open(FLAGS.last_cursor_file, 'w') as f:
+            json.dump(last_cursor, f)
 
     def get_last_cursor_object(self):
-        """Returns a dictionary from last_cursor.jsonl file"""
+        """Returns a dictionary from last_cursor file"""
         with open(FLAGS.last_cursor_file, 'r') as json_file:
-            json_list = list(json_file)
-            last_cursor_object = ''
-
-            for _list in json_list:
-                _dict = _list.splitlines()
-                last_cursor_object += _dict[0]
-
-            return json.loads(last_cursor_object)
+            cursor = json.load(json_file)
+            return cursor
 
 def main(_):
     console.print("Initializing!", style="green on black")

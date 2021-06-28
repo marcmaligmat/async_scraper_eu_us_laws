@@ -21,11 +21,9 @@ pretty.install()
 
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
-flags.DEFINE_integer('page_size', 64, 'Number of results for each page.', short_name='ps')
-flags.DEFINE_string('output_file', 'output.jsonl',
-                    'Name of the file.', short_name='of')
-flags.DEFINE_string('output_dir', 'output.jsonl',
-                    'Directory of the output file', short_name='od')
+flags.DEFINE_integer('page_size', 64, 'Number of results for each page.')
+flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
+flags.DEFINE_string('output_dir', 'output.jsonl', 'Directory of the output file')
 flags.DEFINE_string('last_cursor_file', 'last_cursor.jsonl', 'Last cursor file')
 
 

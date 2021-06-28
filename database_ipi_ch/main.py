@@ -131,7 +131,7 @@ class Database_ipi_ch():
 
     def get_last_cursor_object(self):
         """Returns a dictionary from last_cursor.jsonl file"""
-        with open('last_cursor.jsonl', 'r') as json_file:
+        with open(FLAGS.last_cursor_file, 'r') as json_file:
             json_list = list(json_file)
             last_cursor_object = ''
 

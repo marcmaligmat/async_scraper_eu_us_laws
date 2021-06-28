@@ -42,11 +42,16 @@ For final scraping it is better to scrape by Registration Date from oldest to la
 
 ##### Flags
 
---output_dir=`<directory of the output file where you want to save, including the filename and extensions.   Default: ./output.jsonl   shortname: --od	>`
+--output_dir=`<directory of the output file where you want to save, including the filename and extensions.  
+Default: output.jsonl 
+Shortname: --od	>`
 
---output_file=`<filename of the output, this wont be used if output_dir flag is true, Default: output.jsonl  shortname: --of>`
+--output_file=`<filename of the output, this wont be used if output_dir flag is true. 
+Default: output.jsonl  
+shortname: --of>`
 
---page_size=`<number of page results we want.Choices:8,16,32,64  Default: 64  shrotname: --ps>`
+--page_size=`<number of page results>
+Choices:8,16,32,64   Default: 64  shortname: --ps`
 
 example:
 needs **sudo** because you are creating the output in root directory of the system
@@ -55,6 +60,5 @@ needs **sudo** because you are creating the output in root directory of the syst
 sudo python3 main.py --output_dir=/home/data/output.jsonl --page_size=64 
 is the same as:
 sudo python3 main.py --od=/home/data/output.jsonl --ps=64
-
 
 ```

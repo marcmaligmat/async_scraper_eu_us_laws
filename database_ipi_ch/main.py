@@ -44,7 +44,6 @@ class Database_ipi_ch():
         try:
             cursor = self.get_last_cursor_object()
             num = cursor['expected_results']
-            original_expected_results = cursor['expected_results']
         except:
             self.save_last_cursor(cursor)
 

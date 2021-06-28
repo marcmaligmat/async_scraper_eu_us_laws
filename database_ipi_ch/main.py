@@ -18,7 +18,6 @@ console = Console()
 pretty.install()
 
 
-LAST_CURSOR_FILE = 'last_cursor.jsonl'
 
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
@@ -28,6 +27,7 @@ flags.DEFINE_string('output_file', 'output.jsonl',
                     'Name of the file.', short_name='of')
 flags.DEFINE_string('output_dir', 'output.jsonl',
                     'Directory of the output file', short_name='od')
+flags.DEFINE_string('last_cursor_file', 'last_cursor.jsonl', 'Last cursor file')
 
 
 
@@ -139,7 +139,7 @@ class Database_ipi_ch():
             file_to_save.write(decoded_image_data)
 
     def save_last_cursor(self, last_cursor):
-        self.handle_jsonl('w+', last_cursor, LAST_CURSOR_FILE)
+        self.handle_jsonl('w+', last_cursor, FLAGS.last_cursor_file)
 
     def open_last_cursor(self):
         f = open("last_cursor.txt", "r")

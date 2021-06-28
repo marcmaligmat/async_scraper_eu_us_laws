@@ -23,7 +23,6 @@ FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
 flags.DEFINE_integer('page_size', 64, 'Number of results for each page.')
 flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
-flags.DEFINE_string('output_dir', 'output.jsonl', 'Directory of the output file')
 flags.DEFINE_string('last_cursor_file', 'last_cursor.jsonl', 'Last cursor file')
 
 
@@ -40,15 +39,8 @@ class Database_ipi_ch():
             print('non-flag arguments:', argv)
         self.page_size = FLAGS.page_size
 
-
-        if FLAGS.output_dir != 'output.jsonl':
-            self.output_file = FLAGS.output_dir
-            os.makedirs(os.path.dirname(self.output_file), exist_ok=True)
-        else:
-            if '.json' not in FLAGS.output_file:
-                self.output_file = f"{FLAGS.output_file}.jsonl"
-            else:
-                self.output_file = FLAGS.output_file
+        self.output_file = FLAGS.output_file
+        os.makedirs(os.path.dirname(self.output_file), exist_ok=True)
 
         cursor = {
             'last_cursor': '*',

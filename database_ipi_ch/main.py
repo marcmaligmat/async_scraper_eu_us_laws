@@ -122,12 +122,6 @@ class Database_ipi_ch():
     def save_last_cursor(self, last_cursor):
         self.handle_jsonl('w+', last_cursor, FLAGS.last_cursor_file)
 
-    def open_last_cursor(self):
-        f = open("last_cursor.txt", "r")
-        words = f.read()
-        m = re.search(r'last_cursor:(.+)', words)
-        return m.group(1)
-
     def handle_jsonl(self, mode, json_data, output_file):
         """ Example mode: 'w+','a+' """
         with open(output_file, mode) as f:

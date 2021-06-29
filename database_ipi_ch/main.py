@@ -18,40 +18,21 @@ console = Console()
 pretty.install()
 
 
-LAST_CURSOR_FILE = 'last_cursor.jsonl'
 
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
-flags.DEFINE_enum('page_size', '64', [
-                  '8', '16', '32', '64'], 'Number of results for each page.', short_name='ps')
-flags.DEFINE_string('output_file', 'output.jsonl',
-                    'Name of the file.', short_name='of')
-flags.DEFINE_string('output_dir', 'output.jsonl',
-                    'Directory of the output file', short_name='od')
-
-
+flags.DEFINE_integer('page_size', 64, 'Number of results for each page.')
+flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
+flags.DEFINE_string('last_cursor_file', 'last_cursor.json', 'Last cursor file')
 
 
 class Database_ipi_ch():
-    def __init__(self):
-        console.print("Initializing!", style="green on black")
-        app.run(self.main)
-
-    def main(self, argv):
+    def scrape(self):
         self.session = requests.Session()
-        if FLAGS.debug:
-            print('non-flag arguments:', argv)
-        self.page_size = int(FLAGS.page_size)
+        self.page_size = FLAGS.page_size
 
-
-        if FLAGS.output_dir != 'output.jsonl':
-            self.output_file = FLAGS.output_dir
-            os.makedirs(os.path.dirname(self.output_file), exist_ok=True)
-        else:
-            if '.json' not in FLAGS.output_file:
-                self.output_file = f"{FLAGS.output_file}.jsonl"
-            else:
-                self.output_file = FLAGS.output_file
+        self.output_file = FLAGS.output_file
+        os.makedirs(os.path.dirname(self.output_file), exist_ok=True)
 
         cursor = {
             'last_cursor': '*',
@@ -63,7 +44,6 @@ class Database_ipi_ch():
         try:
             cursor = self.get_last_cursor_object()
             num = cursor['expected_results']
-            original_expected_results = cursor['expected_results']
         except:
             self.save_last_cursor(cursor)
 
@@ -96,8 +76,6 @@ class Database_ipi_ch():
                         'expected_results': cursor['expected_results'] + self.page_size
                     }
                     self.save_last_cursor(cursor)
-
-            f.close()
 
     def generate_string(self, num1):
         return f"Scraped {num1} / {self.total_items} "
@@ -139,33 +117,18 @@ class Database_ipi_ch():
             file_to_save.write(decoded_image_data)
 
     def save_last_cursor(self, last_cursor):
-        self.handle_jsonl('w+', last_cursor, LAST_CURSOR_FILE)
-
-    def open_last_cursor(self):
-        f = open("last_cursor.txt", "r")
-        words = f.read()
-        m = re.search(r'last_cursor:(.+)', words)
-        return m.group(1)
-
-    def handle_jsonl(self, mode, json_data, output_file):
-        """ Example mode: 'w+','a+' """
-        with open(output_file, mode) as f:
-            f.write(json.dumps(json_data) + '\n')
-            # json.dump(json_data, outfile,ensure_ascii=False, indent=4)
-            # outfile.write('\n')
+        with open(FLAGS.last_cursor_file, 'w') as f:
+            json.dump(last_cursor, f)
 
     def get_last_cursor_object(self):
-        """Returns a dictionary from last_cursor.jsonl file"""
-        with open('last_cursor.jsonl', 'r') as json_file:
-            json_list = list(json_file)
-            last_cursor_object = ''
+        """Returns a dictionary from last_cursor file"""
+        with open(FLAGS.last_cursor_file, 'r') as json_file:
+            cursor = json.load(json_file)
+            return cursor
 
-            for _list in json_list:
-                _dict = _list.splitlines()
-                last_cursor_object += _dict[0]
-
-            return json.loads(last_cursor_object)
-
+def main(_):
+    console.print("Initializing!", style="green on black")
+    Database_ipi_ch().scrape()
 
 if __name__ == '__main__':
-    Database_ipi_ch()
+    app.run(main)

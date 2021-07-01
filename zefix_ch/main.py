@@ -1,6 +1,7 @@
 import json
 
 from absl import app, flags
+from lxml import html
 
 from rich import inspect, pretty
 from rich.live import Live
@@ -15,7 +16,7 @@ pretty.install()
 
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
-flags.DEFINE_integer('page_size', 500, 'Number of results for each page.')
+flags.DEFINE_integer('page_size', 5, 'Number of results for each page.')
 flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
 
 
@@ -29,22 +30,85 @@ class Zefix_ch():
         self.session = requests.Session()
         self.set_zefix_config()
         self.send_post()
-        self.parse_zefix_json()
+        self.parse_zefix()
 
         with open(self.output_file, 'a+') as f:
             f.write(self.results)
 
 
-    def parse_zefix_json(self):
+    def parse_zefix(self):
         self.results = ''
         for result in self.response.json()['list']:
             office_url = self.config[result['registerOfficeId']]['url2']
             external_link = self.get_link(result['uid'], office_url)
             result['external_link'] = external_link
-            self.results += json.dumps(result) + '\n'
-        
+            result['table_results'] = self.follow_external_link(external_link)
+            
+            self.results += json.dumps(result, indent=4,ensure_ascii=False) + '\n'
 
-        # inspect(self.response.json())
+    def follow_external_link(self,url):
+        if '.xhtml' in url:
+            response = self.session.get(url)
+            nonces = response.headers['Content-Security-Policy']
+            nonce = nonces.split(' ')[-1].replace('nonce-','')
+
+            tree = html.fromstring(html=response.text)
+            view_state = tree.xpath('//input[@type="hidden" and @name="javax.faces.ViewState"]/@value')
+
+            form_data = {
+                'javax.faces.partial.ajax': 'true',
+                'javax.faces.source': 'idAuszugForm:auszugContentPanel',
+                'primefaces.ignoreautoupdate': 'true',
+                'javax.faces.partial.execute': 'idAuszugForm:auszugContentPanel',
+                'javax.faces.partial.render': 'idAuszugForm:auszugContentPanel',
+                'idAuszugForm:auszugContentPanel': 'idAuszugForm:auszugContentPanel',
+                'idAuszugForm:auszugContentPanel_load': 'true',
+                'idAuszugForm': 'idAuszugForm',
+                'javax.faces.ViewState': view_state,
+                'primefaces.nonce': nonce,
+            }
+
+            headers = {
+                'Faces-Request': 'partial/ajax',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            }
+
+            resp = self.session.post(response.url.split('?')[0] + 
+                                ';jsessionid=' + response.cookies['JSESSIONID'], 
+                                data=form_data, 
+                                headers=headers, 
+                                cookies=response.cookies)
+
+
+
+            tree = html.fromstring(resp.text.encode())
+            tables = tree.xpath('//table')
+            table_results = []
+            for table in tables:
+                theads = table.xpath('.//thead/tr/th')
+                trs = table.xpath('.//tbody/tr')
+                results = {}
+                keys = []
+                for th_val in theads:
+                    texts = th_val.xpath('.//text()')
+                    key = ''.join(texts).strip()
+                    keys.append(key)
+                    results[key] = []
+            #     print(keys[2])
+                all_values = []
+                for tr in trs:
+                    tds = tr.xpath('.//td')
+                    row_values = []
+
+                    for idx, td_val in enumerate(tds):
+                        list_values = []
+                        values = td_val.xpath('.//text()')
+                        value = ''.join(values).strip()
+                        results[keys[idx]].append(value)
+                table_results.append(results)    
+            return table_results
 
 
     def get_link(self,uid,office_link):

@@ -1,5 +1,3 @@
-import json
-
 from absl import app, flags
 from lxml import html
 
@@ -7,6 +5,7 @@ from rich import inspect, pretty
 from rich.live import Live
 from rich.console import Console
 
+import json
 import requests
 
 console = Console()
@@ -16,18 +15,18 @@ pretty.install()
 
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
-flags.DEFINE_integer('page_size', 5, 'Number of results for each page.')
+flags.DEFINE_integer('page_size', 20, 'Number of results for each page.')
 flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
 
 
 class Zefix_ch():
     def __init__(self):
+        self.session = requests.Session()
         self.output_file = FLAGS.output_file
         self.page_size = FLAGS.page_size
 
 
     def scrape(self):
-        self.session = requests.Session()
         self.set_zefix_config()
         self.send_post()
         self.parse_zefix()
@@ -39,16 +38,16 @@ class Zefix_ch():
     def parse_zefix(self):
         self.results = ''
         for result in self.response.json()['list']:
-            office_url = self.config[result['registerOfficeId']]['url2']
-            external_link = self.get_link(result['uid'], office_url)
+            external_link = self.get_link(result)
             result['external_link'] = external_link
             result['table_results'] = self.follow_external_link(external_link)
             
             self.results += json.dumps(result, indent=4,ensure_ascii=False) + '\n'
 
     def follow_external_link(self,url):
+        print(f'Following {url} . . .')
         if '.xhtml' in url:
-            response = self.session.get(url)
+            response = requests.get(url)
             nonces = response.headers['Content-Security-Policy']
             nonce = nonces.split(' ')[-1].replace('nonce-','')
 
@@ -96,14 +95,10 @@ class Zefix_ch():
                     key = ''.join(texts).strip()
                     keys.append(key)
                     results[key] = []
-            #     print(keys[2])
-                all_values = []
                 for tr in trs:
                     tds = tr.xpath('.//td')
-                    row_values = []
 
                     for idx, td_val in enumerate(tds):
-                        list_values = []
                         values = td_val.xpath('.//text()')
                         value = ''.join(values).strip()
                         results[keys[idx]].append(value)
@@ -111,9 +106,16 @@ class Zefix_ch():
             return table_results
 
 
-    def get_link(self,uid,office_link):
+    def get_link(self,result):
+        uid = result['uid']
         uid_formatted = f'{uid[0:3]}-{uid[3:6]}.{uid[6:9]}.{uid[9:12]}'
-        return office_link.replace('#', uid_formatted)
+        if result['status'] == 'GELOESCHT':
+            link = self.config[result['registerOfficeId']]['url4']
+            link = link.replace('#', uid_formatted).replace('de','en')
+            return link.replace('NNNNNNNN',result['shabDate'].replace('-',''))
+        else:
+            office_link = self.config[result['registerOfficeId']]['url2']
+            return office_link.replace('#', uid_formatted)
 
 
     

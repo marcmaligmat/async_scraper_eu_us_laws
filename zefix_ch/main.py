@@ -7,10 +7,10 @@ from rich.console import Console
 
 import json
 import requests
+import re
 
 console = Console()
 pretty.install()
-
 
 
 FLAGS = flags.FLAGS
@@ -21,6 +21,7 @@ flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
 
 class Zefix_ch():
     def __init__(self):
+        self.user_agent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36'
         self.session = requests.Session()
         self.output_file = FLAGS.output_file
         self.page_size = FLAGS.page_size
@@ -46,7 +47,7 @@ class Zefix_ch():
 
     def follow_external_link(self,url):
         print(f'Following {url} . . .')
-        if '.xhtml' in url:
+        if 'chregister.ch' in url:
             response = requests.get(url)
             nonces = response.headers['Content-Security-Policy']
             nonce = nonces.split(' ')[-1].replace('nonce-','')
@@ -105,6 +106,125 @@ class Zefix_ch():
                 table_results.append(results)    
             return table_results
 
+        elif 'prestations' in url:
+            prestations_url = 'https://prestations.vd.ch/pub/101266/api/public/hrcexcerpts/'
+            uid = re.search(r'(CHE.+)$', url)[1]
+
+            headers = {
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Content-Type': 'application/json',
+                'User-Agent': self.user_agent
+            }
+            body =  {"rcentId":"","lng":"EN","rad":True,
+                    "companyOfsUid":uid,
+                    "extraitTravail":True,
+                    "admOrderDirection":"ASC",
+                    "order":"R"}
+
+            response =requests.post(prestations_url,headers=headers,json=body)
+            return response.json()
+
+        elif 'ge.ch' in url:
+            # change url to companyReport
+            url = url.replace('externalCompanyReport','companyReport') + '&lang=EN'
+            response = requests.get(url)
+            tree = html.fromstring(html=response.text)
+            tables = tree.xpath('//table[@border=1]')
+            
+            table_results = []
+            for table in tables:
+                tr_with_th = table.xpath('.//tr[th]')
+                tr_td_only = table.xpath('.//tr[td]')
+                
+                results = {}
+                keys = []
+                parent_keys = []
+                
+                if len(tr_with_th) == 2:
+                    for value in tr_with_th[0]:
+                        try:
+                            colspan=int(value.xpath('@colspan')[0])
+                        except:
+                            colspan=1
+                        if colspan > 0:
+                            for n in range(colspan):
+                                texts = value.xpath('.//text()')
+                                key = ''.join(texts).strip() 
+                                parent_keys.append(key)
+                        else:
+                            texts = value.xpath('.//text()')
+                            key = ''.join(texts).strip() 
+                            parent_keys.append(key)
+
+                            
+                    for value in tr_with_th[1]:
+                        try:
+                            colspan=int(value.xpath('@colspan')[0])
+                        except:
+                            colspan=1
+                        if colspan > 0:
+                            for n in range(colspan):
+                                texts = value.xpath('.//text()')
+                                key = ''.join(texts).strip() 
+                                keys.append(key)
+                        else:
+                            texts = value.xpath('.//text()')
+                            key = ''.join(texts).strip() 
+                            keys.append(key)
+                        results[key] = []
+                            
+                elif len(tr_with_th) == 1:
+                    for value in tr_with_th[0]:
+                        try:
+                            colspan=int(value.xpath('@colspan')[0])
+                        except:
+                            colspan=1
+                        if colspan > 0:
+                            for n in range(colspan):
+                                texts = value.xpath('.//text()')
+                                key = ''.join(texts).strip() 
+                                keys.append(key)
+                        else:
+                            texts = value.xpath('.//text()')
+                            key = ''.join(texts).strip() 
+                            keys.append(key)
+                            
+                        results[key] = []
+                
+                if len(parent_keys) > 0:
+                    results = {}
+                    for p_key in parent_keys:
+                        results[p_key] = []
+                    key_array = {}
+                    for idx,key in enumerate(keys):
+                        results[parent_keys[idx]].append({key})
+                    
+                    print(results)
+                    for trs_with_td in tr_td_only:
+                        n = 0
+                        for idx, td_val in enumerate(trs_with_td):
+                            values = td_val.xpath('.//text()')
+                            value = ''.join(values).strip()
+                            
+                            if parent_keys[idx] == 'Capital shares':
+                                results[parent_keys[idx]][n] = {keys[idx] : value}
+                                n+=1
+                            elif parent_keys[idx] == parent_keys[idx-1]:
+                                results[parent_keys[idx]][1] = {keys[idx] : value}
+                            else:
+                                results[parent_keys[idx]][0] = {keys[idx] : value}
+                                n=0
+                    
+                else:
+                    for trs_with_td in tr_td_only:
+                        for idx, td_val in enumerate(trs_with_td):
+                            values = td_val.xpath('.//text()')
+                            value = ''.join(values).strip()
+                            results[keys[idx]].append(value)
+                            
+                return results
+                
+
 
     def get_link(self,result):
         uid = result['uid']
@@ -112,17 +232,18 @@ class Zefix_ch():
         if result['status'] == 'GELOESCHT':
             link = self.config[result['registerOfficeId']]['url4']
             link = link.replace('#', uid_formatted).replace('de','en')
-            return link.replace('NNNNNNNN',result['shabDate'].replace('-',''))
+            link = link.replace('NNNNNNNN',result['shabDate'].replace('-',''))
         else:
-            office_link = self.config[result['registerOfficeId']]['url2']
-            return office_link.replace('#', uid_formatted)
+            link = self.config[result['registerOfficeId']]['url2']
+            link = link.replace('#', uid_formatted)
 
+        return link.replace('lang=FR','lang=EN')
 
     
 
     def send_post(self):
         headers = {
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36',
+            'User-Agent': self.user_agent,
             'Content-Type': 'application/json;charset=UTF-8'
         }
 
@@ -143,18 +264,25 @@ class Zefix_ch():
     
     def set_zefix_config(self):
         with open('registry_offices.json', 'r') as f:
-            ro = list(json.loads(f.read()))
+            registry_offices = list(json.loads(f.read()))
 
         self.config = {}
-        for result in ro:
+        for result in registry_offices:
             self.config[result['id']]=result
 
 
 
     def get_zefix_config():
-        zefix_global = requests.get('https://www.zefix.ch/ZefixREST/api/v1/appConfigData.json').json()
+        zefix_global = requests.get(
+            'https://www.zefix.ch/ZefixREST/api/v1/appConfigData.json'
+            ).json()
+
         with open('output.json', 'w') as f:
-            json.dump(zefix_global["registryOffices"], f, indent=4, ensure_ascii=False)
+            json.dump(
+                zefix_global["registryOffices"], f, 
+                indent=4, 
+                ensure_ascii=False
+            )
             
 
 

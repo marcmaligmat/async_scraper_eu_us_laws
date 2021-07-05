@@ -2,15 +2,17 @@ from absl import app, flags
 
 import Chregister
 import Hrcintapp
-
+from concurrent.futures import ThreadPoolExecutor
 
 from rich import inspect, pretty
 from rich.live import Live
 from rich.console import Console
 
+
 import json
 import requests
 import re
+import time
 
 console = Console()
 pretty.install()
@@ -18,7 +20,7 @@ pretty.install()
 
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
-flags.DEFINE_integer('page_size', 5, 'Number of results for each page.')
+flags.DEFINE_integer('page_size', 100, 'Number of results for each page.')
 flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
 
 
@@ -41,16 +43,25 @@ class Zefix_ch():
             f.write(self.results)
 
     def parse_zefix(self):
+        start = time.time()
         self.results = ''
-        for result in self.response.json()['list']:
-            external_link = self.get_link(result)
-            result['external_link'] = external_link
-            result['table_results'] = self.follow_external_link(external_link)
-            
-            self.results += json.dumps(result, indent=4,ensure_ascii=False) + '\n'
+        with ThreadPoolExecutor(max_workers=self.page_size) as executor:
+            executor.map(self.transform,self.response.json()['list'])
+
+        end = time.time()
+        total_time = end - start
+        print(f"It took {total_time} seconds to scrape")
+
+    def transform(self,result):
+        
+        external_link = self.get_link(result)
+        result['external_link'] = external_link
+        result['table_results'] = self.follow_external_link(external_link)
+        
+        self.results += json.dumps(result, indent=4,ensure_ascii=False) + '\n'       
 
     def follow_external_link(self,url):
-        print(f'Following {url} . . .')
+        # print(f'Following {url} . . .')
 
         if 'chregister.ch' in url:
             response = requests.get(url,headers = self.headers)
@@ -81,6 +92,8 @@ class Zefix_ch():
 
         else:
             return 'Not in a scraper'
+
+        
             
 
     def get_link(self,result):

@@ -20,7 +20,7 @@ pretty.install()
 
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
-flags.DEFINE_integer('page_size', 100, 'Number of results for each page.')
+flags.DEFINE_integer('page_size', 1000, 'Number of results for each page.')
 flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
 
 
@@ -43,6 +43,8 @@ class Zefix_ch():
             f.write(self.results)
 
     def parse_zefix(self):
+        print('Start Loop')
+        self.counter = 0
         start = time.time()
         self.results = ''
         with ThreadPoolExecutor(max_workers=self.page_size) as executor:
@@ -53,8 +55,9 @@ class Zefix_ch():
         print(f"It took {total_time} seconds to scrape")
 
     def transform(self,result):
-        
+        self.counter += 1
         external_link = self.get_link(result)
+        print(self.counter, external_link)
         result['external_link'] = external_link
         result['table_results'] = self.follow_external_link(external_link)
         

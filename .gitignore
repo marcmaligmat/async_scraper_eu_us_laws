@@ -1,3 +1,13 @@
+# project based ignore files or folders 
+output/
+output.json
+output.jsonl
+.vscode
+test.py
+last_cursor.txt
+decoded_image.png
+last_cursor*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

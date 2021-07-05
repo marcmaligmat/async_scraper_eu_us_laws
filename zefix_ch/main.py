@@ -1,5 +1,8 @@
 from absl import app, flags
-from lxml import html
+
+import Chregister
+import Hrcintapp
+
 
 from rich import inspect, pretty
 from rich.live import Live
@@ -15,7 +18,7 @@ pretty.install()
 
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
-flags.DEFINE_integer('page_size', 20, 'Number of results for each page.')
+flags.DEFINE_integer('page_size', 5, 'Number of results for each page.')
 flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
 
 
@@ -25,7 +28,9 @@ class Zefix_ch():
         self.session = requests.Session()
         self.output_file = FLAGS.output_file
         self.page_size = FLAGS.page_size
-
+        self.headers = {
+            'User-Agent':self.user_agent
+        }
 
     def scrape(self):
         self.set_zefix_config()
@@ -34,7 +39,6 @@ class Zefix_ch():
 
         with open(self.output_file, 'a+') as f:
             f.write(self.results)
-
 
     def parse_zefix(self):
         self.results = ''
@@ -47,64 +51,15 @@ class Zefix_ch():
 
     def follow_external_link(self,url):
         print(f'Following {url} . . .')
+
         if 'chregister.ch' in url:
-            response = requests.get(url)
-            nonces = response.headers['Content-Security-Policy']
-            nonce = nonces.split(' ')[-1].replace('nonce-','')
-
-            tree = html.fromstring(html=response.text)
-            view_state = tree.xpath('//input[@type="hidden" and @name="javax.faces.ViewState"]/@value')
-
-            form_data = {
-                'javax.faces.partial.ajax': 'true',
-                'javax.faces.source': 'idAuszugForm:auszugContentPanel',
-                'primefaces.ignoreautoupdate': 'true',
-                'javax.faces.partial.execute': 'idAuszugForm:auszugContentPanel',
-                'javax.faces.partial.render': 'idAuszugForm:auszugContentPanel',
-                'idAuszugForm:auszugContentPanel': 'idAuszugForm:auszugContentPanel',
-                'idAuszugForm:auszugContentPanel_load': 'true',
-                'idAuszugForm': 'idAuszugForm',
-                'javax.faces.ViewState': view_state,
-                'primefaces.nonce': nonce,
-            }
-
-            headers = {
-                'Faces-Request': 'partial/ajax',
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
-            }
-
-            resp = self.session.post(response.url.split('?')[0] + 
-                                ';jsessionid=' + response.cookies['JSESSIONID'], 
-                                data=form_data, 
-                                headers=headers, 
-                                cookies=response.cookies)
-
-
-
-            tree = html.fromstring(resp.text.encode())
-            tables = tree.xpath('//table')
-            table_results = []
-            for table in tables:
-                theads = table.xpath('.//thead/tr/th')
-                trs = table.xpath('.//tbody/tr')
-                results = {}
-                keys = []
-                for th_val in theads:
-                    texts = th_val.xpath('.//text()')
-                    key = ''.join(texts).strip()
-                    keys.append(key)
-                    results[key] = []
-                for tr in trs:
-                    tds = tr.xpath('.//td')
-
-                    for idx, td_val in enumerate(tds):
-                        values = td_val.xpath('.//text()')
-                        value = ''.join(values).strip()
-                        results[keys[idx]].append(value)
-                table_results.append(results)    
-            return table_results
+            response = requests.get(url,headers = self.headers)
+            return Chregister.Chregister(response).table_results
+            
+        elif 'hrcintapp/' in url:
+            url = url.replace('externalCompanyReport','companyReport') + '&lang=EN'
+            response = requests.get(url, headers = self.headers)
+            return Hrcintapp.Hrcintapp(response).table_results
 
         elif 'prestations' in url:
             prestations_url = 'https://prestations.vd.ch/pub/101266/api/public/hrcexcerpts/'
@@ -124,107 +79,9 @@ class Zefix_ch():
             response =requests.post(prestations_url,headers=headers,json=body)
             return response.json()
 
-        elif 'ge.ch' in url:
-            # change url to companyReport
-            url = url.replace('externalCompanyReport','companyReport') + '&lang=EN'
-            response = requests.get(url)
-            tree = html.fromstring(html=response.text)
-            tables = tree.xpath('//table[@border=1]')
+        else:
+            return 'Not in a scraper'
             
-            table_results = []
-            for table in tables:
-                tr_with_th = table.xpath('.//tr[th]')
-                tr_td_only = table.xpath('.//tr[td]')
-                
-                results = {}
-                keys = []
-                parent_keys = []
-                
-                if len(tr_with_th) == 2:
-                    for value in tr_with_th[0]:
-                        try:
-                            colspan=int(value.xpath('@colspan')[0])
-                        except:
-                            colspan=1
-                        if colspan > 0:
-                            for n in range(colspan):
-                                texts = value.xpath('.//text()')
-                                key = ''.join(texts).strip() 
-                                parent_keys.append(key)
-                        else:
-                            texts = value.xpath('.//text()')
-                            key = ''.join(texts).strip() 
-                            parent_keys.append(key)
-
-                            
-                    for value in tr_with_th[1]:
-                        try:
-                            colspan=int(value.xpath('@colspan')[0])
-                        except:
-                            colspan=1
-                        if colspan > 0:
-                            for n in range(colspan):
-                                texts = value.xpath('.//text()')
-                                key = ''.join(texts).strip() 
-                                keys.append(key)
-                        else:
-                            texts = value.xpath('.//text()')
-                            key = ''.join(texts).strip() 
-                            keys.append(key)
-                        results[key] = []
-                            
-                elif len(tr_with_th) == 1:
-                    for value in tr_with_th[0]:
-                        try:
-                            colspan=int(value.xpath('@colspan')[0])
-                        except:
-                            colspan=1
-                        if colspan > 0:
-                            for n in range(colspan):
-                                texts = value.xpath('.//text()')
-                                key = ''.join(texts).strip() 
-                                keys.append(key)
-                        else:
-                            texts = value.xpath('.//text()')
-                            key = ''.join(texts).strip() 
-                            keys.append(key)
-                            
-                        results[key] = []
-                
-                if len(parent_keys) > 0:
-                    results = {}
-                    for p_key in parent_keys:
-                        results[p_key] = []
-                    key_array = {}
-                    for idx,key in enumerate(keys):
-                        results[parent_keys[idx]].append({key})
-                    
-                    print(results)
-                    for trs_with_td in tr_td_only:
-                        n = 0
-                        for idx, td_val in enumerate(trs_with_td):
-                            values = td_val.xpath('.//text()')
-                            value = ''.join(values).strip()
-                            
-                            if parent_keys[idx] == 'Capital shares':
-                                results[parent_keys[idx]][n] = {keys[idx] : value}
-                                n+=1
-                            elif parent_keys[idx] == parent_keys[idx-1]:
-                                results[parent_keys[idx]][1] = {keys[idx] : value}
-                            else:
-                                results[parent_keys[idx]][0] = {keys[idx] : value}
-                                n=0
-                    
-                else:
-                    for trs_with_td in tr_td_only:
-                        for idx, td_val in enumerate(trs_with_td):
-                            values = td_val.xpath('.//text()')
-                            value = ''.join(values).strip()
-                            results[keys[idx]].append(value)
-                            
-                return results
-                
-
 
     def get_link(self,result):
         uid = result['uid']
@@ -238,8 +95,6 @@ class Zefix_ch():
             link = link.replace('#', uid_formatted)
 
         return link.replace('lang=FR','lang=EN')
-
-    
 
     def send_post(self):
         headers = {
@@ -284,9 +139,6 @@ class Zefix_ch():
                 ensure_ascii=False
             )
             
-
-
-        
 
 def main(_):
     console.print("Initializing!", style="green on black")

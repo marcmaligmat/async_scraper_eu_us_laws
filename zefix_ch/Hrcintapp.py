@@ -30,46 +30,54 @@ class Hrcintapp():
         tree = html.fromstring(response.text)
         self.tables = tree.xpath('//table[@border=1]')
         self.table_results = []
+        
         for table in self.tables:
             tr_with_th = table.xpath('.//tr[th]')
             tr_td_only = table.xpath('.//tr[td]')
             results = {}
             self.parent_keys = []
             self.keys = []
-            
+
             if len(tr_with_th) == 2:
                 for self.value in tr_with_th[0]:
                     self.p_keys_and_values_map(self.get_colspan())
                 for self.value in tr_with_th[1]:
                     self.keys_and_values_map(self.get_colspan())
                     
-            elif len(tr_with_th) == 1:
+            elif len(tr_with_th) > 0:
                 for self.value in tr_with_th[0]:
                     self.keys_and_values_map(self.get_colspan())
                     
             else:
                 print('No TH found')
-                continue
-            
+                
             # Parent_keys are the top level of two <tr> with <th>
             if len(self.parent_keys) > 0:
                 for p_key in self.parent_keys:
                     results[p_key] = []
                 for idx,key in enumerate(self.keys):
                     results[self.parent_keys[idx]].append({key})
+                values = []
                 for trs_with_td in tr_td_only:
-                    n = 0
-                    ###logic to values+keys+parent_keys
                     for idx, self.value in enumerate(trs_with_td.xpath('.//td')):
-                        value = self.get_td_text_value()
-                        results[self.parent_keys[idx]][n] = {self.keys[idx] : value}
+                        values.append(self.get_td_text_value())
 
-                        if idx == len(self.parent_keys)-1:
-                            continue
-                        elif self.parent_keys[idx] == self.parent_keys[idx+1]:
-                            n+=1
-                        else:
-                            n=0
+                n=0
+                for idx, key in enumerate(self.keys):
+                    lower_index = idx
+                    upper_index = lower_index + len(self.keys)
+
+                    v = ";".join([e for i, e in enumerate(values) 
+                                    if i in [lower_index,upper_index]]
+                            ).split(';')
+                    results[self.parent_keys[idx]][n]= {key :v}
+                    if idx == len(self.parent_keys)-1:
+                        continue
+                    elif self.parent_keys[idx] == self.parent_keys[idx+1]:
+                        n+=1
+                    else:
+                        n=0
+
             else:
                 for key in self.keys:
                     results[key] = []

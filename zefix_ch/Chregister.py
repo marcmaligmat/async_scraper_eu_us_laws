@@ -8,7 +8,7 @@ class Chregister():
     def scrape(self,response):
         nonces = response.headers['Content-Security-Policy']
         nonce = nonces.split(' ')[-1].replace('nonce-','')
-
+        
         tree = html.fromstring(html=response.text)
         view_state = tree.xpath('//input[@type="hidden" and @name="javax.faces.ViewState"]/@value')
 

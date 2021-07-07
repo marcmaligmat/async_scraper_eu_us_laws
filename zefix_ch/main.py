@@ -4,12 +4,16 @@ import Chregister
 import Hrcintapp
 from concurrent.futures import ThreadPoolExecutor
 
+from fake_useragent import UserAgent
+
+
 from rich import inspect, pretty
 from rich.live import Live
 from rich.console import Console
 
 
 import json
+import random
 import requests
 import re
 import time
@@ -17,17 +21,20 @@ import time
 console = Console()
 pretty.install()
 
-
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
 flags.DEFINE_integer('page_size', 1000, 'Number of results for each page.')
 flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
 
-
+ua = UserAgent()
 class Zefix_ch():
     def __init__(self):
         self.user_agent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36'
         self.session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(max_retries=3, pool_connections=1000, pool_maxsize=1000)
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
+
         self.output_file = FLAGS.output_file
         self.page_size = FLAGS.page_size
         self.headers = {
@@ -47,7 +54,7 @@ class Zefix_ch():
         self.counter = 0
         start = time.time()
         self.results = ''
-        with ThreadPoolExecutor(max_workers=self.page_size) as executor:
+        with ThreadPoolExecutor(max_workers=1000) as executor:
             executor.map(self.transform,self.response.json()['list'])
 
         end = time.time()
@@ -55,47 +62,64 @@ class Zefix_ch():
         print(f"It took {total_time} seconds to scrape")
 
     def transform(self,result):
-        self.counter += 1
-        external_link = self.get_link(result)
-        print(self.counter, external_link)
-        result['external_link'] = external_link
-        result['table_results'] = self.follow_external_link(external_link)
-        
+        if len(result) > 0:
+            self.counter += 1
+            external_link = self.get_link(result)
+            result['external_link'] = external_link
+            result['table_results'] = self.follow_external_link(external_link)
+        else:
+            print(result)
         self.results += json.dumps(result, indent=4,ensure_ascii=False) + '\n'       
 
     def follow_external_link(self,url):
-        # print(f'Following {url} . . .')
+        try:
+            if 'chregister.ch' in url:
+                response = requests.get(url,headers = self.headers)
+                return Chregister.Chregister(response).table_results
+                
+            elif 'hrcintapp/' in url:
+                url = url.replace('externalCompanyReport','companyReport') + '&lang=EN'
+                response = requests.get(url, headers = self.headers)
+                return Hrcintapp.Hrcintapp(response).table_results
 
-        if 'chregister.ch' in url:
-            response = requests.get(url,headers = self.headers)
-            return Chregister.Chregister(response).table_results
-            
-        elif 'hrcintapp/' in url:
-            url = url.replace('externalCompanyReport','companyReport') + '&lang=EN'
-            response = requests.get(url, headers = self.headers)
-            return Hrcintapp.Hrcintapp(response).table_results
+            elif 'prestations' in url:
+                prestations_url = 'https://prestations.vd.ch/pub/101266/api/public/hrcexcerpts/'
+                if 'CHE' not in url:
+                    return 'No CHE in url'
 
-        elif 'prestations' in url:
-            prestations_url = 'https://prestations.vd.ch/pub/101266/api/public/hrcexcerpts/'
-            uid = re.search(r'(CHE.+)$', url)[1]
+                uid = re.search(r'(CHE.+)$', url)[1]
+                
+                # print(ua.random)
+                headers = {
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Content-Type': 'application/json',
+                    'User-Agent': ua.random,
+                    # 'X-XSRF-TOKEN': 'bf16c53b-f1bc-4485-adfc-769be3f9a210'
+                }
+                body =  {"rcentId":"","lng":"EN","rad":True,
+                        "companyOfsUid":uid,
+                        "extraitTravail":True,
+                        "admOrderDirection":"ASC",
+                        "order":"R"}
 
-            headers = {
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Content-Type': 'application/json',
-                'User-Agent': self.user_agent
-            }
-            body =  {"rcentId":"","lng":"EN","rad":True,
-                    "companyOfsUid":uid,
-                    "extraitTravail":True,
-                    "admOrderDirection":"ASC",
-                    "order":"R"}
+                response = requests.post(
+                    prestations_url,
+                    headers=headers,
+                    json=body,
+                    allow_redirects=False,
+                    
+                )
+                try:
+                    data = response.json()
+                except Exception as e:
+                    data = 'There was a 302 problem'
+                return data
 
-            response =requests.post(prestations_url,headers=headers,json=body)
-            return response.json()
-
-        else:
-            return 'Not in a scraper'
-
+            else:
+                return 'Not in a scraper'
+        except Exception as e:
+            print(e ,url)
+            return('Cannot find')
         
             
 
@@ -130,7 +154,8 @@ class Zefix_ch():
         self.response = self.session.post(
             'https://www.zefix.ch/ZefixREST/api/v1/firm/search.json',
             headers=headers,
-            json=post_body)
+            json=post_body
+        )
 
     
     def set_zefix_config(self):

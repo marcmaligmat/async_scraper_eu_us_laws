@@ -31,7 +31,9 @@ class Zefix_ch():
     def __init__(self):
         self.user_agent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36'
         self.session = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(max_retries=3, pool_connections=1000, pool_maxsize=1000)
+        self.offset = 0
+        self.wildcard = '__'
+        adapter = requests.adapters.HTTPAdapter(max_retries=1, pool_connections=1000, pool_maxsize=1000)
         self.session.mount('http://', adapter)
         self.session.mount('https://', adapter)
 
@@ -44,10 +46,22 @@ class Zefix_ch():
     def scrape(self):
         self.set_zefix_config()
         self.send_post()
+        _next = self.response.json()['hasMoreResults']
+        print(f"Has more results? {_next}")
         self.parse_zefix()
 
         with open(self.output_file, 'a+') as f:
             f.write(self.results)
+
+        if self.response.json()['hasMoreResults'] == True:
+            self.offset += self.page_size
+            print(f'Scraping offset: {self.offset}')
+            self.scrape()
+        elif self.wildcard == '__':
+            self.wildcard = '_ _'
+            self.scrape()
+        else:
+            print('Finished Scraping')
 
     def parse_zefix(self):
         print('Start Loop')
@@ -89,7 +103,6 @@ class Zefix_ch():
 
                 uid = re.search(r'(CHE.+)$', url)[1]
                 
-                # print(ua.random)
                 headers = {
                     'Accept-Language': 'en-US,en;q=0.9',
                     'Content-Type': 'application/json',
@@ -143,12 +156,12 @@ class Zefix_ch():
         }
 
         post_body = {
-            'name':'__',
+            'name':self.wildcard,
             'languageKey':'en',
             'deletedFirms': 'true',
             'searchType':'exact',
             'maxEntries':self.page_size,
-            'offset':0
+            'offset':self.offset
         }
 
         self.response = self.session.post(

@@ -23,7 +23,7 @@ pretty.install()
 
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
-flags.DEFINE_integer('page_size', 1000, 'Number of results for each page.')
+flags.DEFINE_integer('page_size', 20, 'Number of results for each page.')
 flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
 
 ua = UserAgent()
@@ -33,7 +33,7 @@ class Zefix_ch():
         self.session = requests.Session()
         self.offset = 0
         self.wildcard = '__'
-        adapter = requests.adapters.HTTPAdapter(max_retries=1, pool_connections=1000, pool_maxsize=1000)
+        adapter = requests.adapters.HTTPAdapter(max_retries=1, pool_connections=20, pool_maxsize=20)
         self.session.mount('http://', adapter)
         self.session.mount('https://', adapter)
 

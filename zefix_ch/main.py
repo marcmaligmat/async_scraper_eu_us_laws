@@ -4,7 +4,7 @@ import Chregister
 import Hrcintapp
 from concurrent.futures import ThreadPoolExecutor
 
-from fake_useragent import UserAgent
+
 
 
 from rich import inspect, pretty
@@ -24,21 +24,20 @@ pretty.install()
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
 flags.DEFINE_integer('page_size', 20, 'Number of results for each page.')
-flags.DEFINE_string('output_file', 'output.jsonl', 'Name of the file.')
+flags.DEFINE_integer('parallel_requests', 20, 'Name of the file.')
+flags.DEFINE_string('output_file', './output.jsonl', 'Name of the file.')
 
-ua = UserAgent()
+
 class Zefix_ch():
     def __init__(self):
+        self.output_file = FLAGS.output_file
+        self.page_size = FLAGS.page_size
+        self.parallel_requests = FLAGS.parallel_requests
         self.user_agent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36'
         self.session = requests.Session()
         self.offset = 0
         self.wildcard = '__'
-        adapter = requests.adapters.HTTPAdapter(max_retries=1, pool_connections=20, pool_maxsize=20)
-        self.session.mount('http://', adapter)
-        self.session.mount('https://', adapter)
 
-        self.output_file = FLAGS.output_file
-        self.page_size = FLAGS.page_size
         self.headers = {
             'User-Agent':self.user_agent
         }
@@ -68,7 +67,7 @@ class Zefix_ch():
         self.counter = 0
         start = time.time()
         self.results = ''
-        with ThreadPoolExecutor(max_workers=1000) as executor:
+        with ThreadPoolExecutor(max_workers=self.parallel_requests) as executor:
             executor.map(self.transform,self.response.json()['list'])
 
         end = time.time()
@@ -106,7 +105,7 @@ class Zefix_ch():
                 headers = {
                     'Accept-Language': 'en-US,en;q=0.9',
                     'Content-Type': 'application/json',
-                    'User-Agent': ua.random,
+                    'User-Agent': self.user_agent ,
                     # 'X-XSRF-TOKEN': 'bf16c53b-f1bc-4485-adfc-769be3f9a210'
                 }
                 body =  {"rcentId":"","lng":"EN","rad":True,

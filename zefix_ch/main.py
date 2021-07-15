@@ -5,7 +5,7 @@ import Hrcintapp
 from concurrent.futures import ThreadPoolExecutor
 
 
-
+import logging
 
 from rich import inspect, pretty
 from rich.live import Live
@@ -24,20 +24,19 @@ pretty.install()
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
 flags.DEFINE_integer('page_size', 20, 'Number of results for each page.')
-flags.DEFINE_integer('parallel_requests', 20, 'Name of the file.')
 flags.DEFINE_string('output_file', './output.jsonl', 'Name of the file.')
-
+flags.DEFINE_string('errorlog_file', './error.log', 'Name of the file.')
 
 class Zefix_ch():
     def __init__(self):
         self.output_file = FLAGS.output_file
         self.page_size = FLAGS.page_size
-        self.parallel_requests = FLAGS.parallel_requests
+        self.errorlog_file = FLAGS.errorlog_file
         self.user_agent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36'
         self.session = requests.Session()
         self.offset = 0
         self.wildcard = '__'
-
+        self._logger()
         self.headers = {
             'User-Agent':self.user_agent
         }
@@ -46,7 +45,8 @@ class Zefix_ch():
         self.set_zefix_config()
         self.send_post()
         _next = self.response.json()['hasMoreResults']
-        print(f"Has more results? {_next}")
+        if _next == True:
+            print(f"Has more results")
         self.parse_zefix()
 
         with open(self.output_file, 'a+') as f:
@@ -67,23 +67,25 @@ class Zefix_ch():
         self.counter = 0
         start = time.time()
         self.results = ''
-        with ThreadPoolExecutor(max_workers=self.parallel_requests) as executor:
+        with ThreadPoolExecutor(max_workers=self.page_size) as executor:
             executor.map(self.transform,self.response.json()['list'])
 
         end = time.time()
         total_time = end - start
-        print(f"It took {total_time} seconds to scrape")
+        self.logger.info(f"It took {total_time} seconds to scrape")
 
     def transform(self,result):
-        if len(result) > 0:
+        try:
             self.counter += 1
             external_link = self.get_link(result)
             result['external_link'] = external_link
             result['table_results'] = self.follow_external_link(external_link)
-        else:
-            print(result)
-        self.results += json.dumps(result, indent=4,ensure_ascii=False) + '\n'       
-
+            #remove indent=4 when production
+            if result['table_results']:
+                self.results += json.dumps(result, indent=4, ensure_ascii=False) + '\n'  
+        except:
+            self.logger.exception(external_link)
+            
     def follow_external_link(self,url):
         try:
             if 'chregister.ch' in url:
@@ -98,7 +100,7 @@ class Zefix_ch():
             elif 'prestations' in url:
                 prestations_url = 'https://prestations.vd.ch/pub/101266/api/public/hrcexcerpts/'
                 if 'CHE' not in url:
-                    return 'No CHE in url'
+                    return self.logger.exception(f'no CHE in url {url}')
 
                 uid = re.search(r'(CHE.+)$', url)[1]
                 
@@ -123,15 +125,16 @@ class Zefix_ch():
                 )
                 try:
                     data = response.json()
+                    return data
                 except Exception as e:
-                    data = 'There was a 302 problem'
-                return data
+                    self.logger.exception(url)
+                
 
             else:
-                return 'Not in a scraper'
+                self.logger.error(f"Not in a scraper {url}")
         except Exception as e:
-            print(e ,url)
-            return('Cannot find')
+            self.logger.exception(f'{url} : {e}')
+
         
             
 
@@ -191,6 +194,23 @@ class Zefix_ch():
                 indent=4, 
                 ensure_ascii=False
             )
+
+    def _logger(self):
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+
+        formatter = logging.Formatter('%(asctime)s: %(message)s')
+
+        file_handler = logging.FileHandler(self.errorlog_file)
+        file_handler.setLevel(logging.ERROR)
+        file_handler.setFormatter(formatter)
+
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+
+        logger.addHandler(file_handler)
+        logger.addHandler(stream_handler)
+        self.logger = logger
             
 
 def main(_):

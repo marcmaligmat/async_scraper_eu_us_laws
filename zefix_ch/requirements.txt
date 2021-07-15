@@ -1,0 +1,14 @@
+absl-py==0.13.0
+certifi==2021.5.30
+chardet==4.0.0
+charset-normalizer==2.0.2
+colorama==0.4.4
+commonmark==0.9.1
+fake-useragent==0.1.11
+idna==2.10
+lxml==4.6.3
+Pygments==2.9.0
+requests==2.25.1
+rich==10.4.0
+six==1.16.0
+urllib3==1.26.6

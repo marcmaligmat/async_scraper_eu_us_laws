@@ -23,6 +23,7 @@ flags.DEFINE_boolean("debug", False, "Produces debugging output.")
 flags.DEFINE_string("files_folder", "output", "Files Folder.")
 flags.DEFINE_string("output_file", "./output.jsonl", "Name of the output file.")
 flags.DEFINE_string("errorlog_file", "./error.log", "Name of the file.")
+flags.DEFINE_integer("loop_timeout", 1, "Name of the file.")
 
 
 class Entscheidsuche_ch:
@@ -32,6 +33,7 @@ class Entscheidsuche_ch:
         self.files_folder = FLAGS.files_folder
         self.output_file = FLAGS.output_file
         self.logger = _logger(FLAGS.errorlog_file)
+        self.loop_timeout = FLAGS.loop_timeout
 
     def scrape(self):
         response = requests.get(self.starting_url)
@@ -52,8 +54,7 @@ class Entscheidsuche_ch:
                 '//a[contains(@href,"/docs") and text() != "Parent Directory"]/@href'
             )
             self.parse()
-            sleep(1)
-            break
+            sleep(self.loop_timeout)
 
     def parse(self):
         for file_link in self.file_links:

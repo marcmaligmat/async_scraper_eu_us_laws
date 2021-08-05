@@ -1,9 +1,6 @@
 import base64
 import json
 
-import sys
-
-sys.path.append("..")
 from settings import Settings
 
 from math import ceil

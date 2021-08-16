@@ -22,7 +22,6 @@ pretty.install()
 class Database_ipi_ch:
     def scrape(self):
         self.settings = Settings()
-
         self.session = requests.Session()
 
         self.output_file = self.settings.output_file
@@ -71,6 +70,14 @@ class Database_ipi_ch:
                         + self.settings.page_size,
                     }
                     self.save_last_cursor(cursor)
+                    break
+
+        self.settings.upload_to_minio(
+            self.settings.s3_url,
+            self.settings.s3_access_key,
+            self.settings.s3_secret_key,
+            self.settings.bucket,
+        )
 
     def generate_string(self, num1):
         return f"Scraped {num1} / {self.total_items} "

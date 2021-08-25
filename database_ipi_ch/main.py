@@ -70,10 +70,11 @@ class Database_ipi_ch:
                         + self.settings.page_size,
                     }
                     self.save_last_cursor(cursor)
-                    break
+                    if self.settings.debug:
+                        break
 
         self.settings.upload_to_minio(
-            self.settings.s3_url,
+            self.settings.s3_endpoint,
             self.settings.s3_access_key,
             self.settings.s3_secret_key,
             self.settings.bucket,

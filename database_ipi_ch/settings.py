@@ -10,9 +10,9 @@ class Settings(SharedSettings):
     folder_name: str = "database_ipi_ch"
     bucket: str = "marc-testing2"
 
-    def upload_to_minio(self, s3_url, s3_access_key, s3_secret_key, bucket):
+    def upload_to_minio(self, s3_endpoint, s3_access_key, s3_secret_key, bucket):
         client = Minio(
-            s3_url,
+            s3_endpoint,
             access_key=s3_access_key,
             secret_key=s3_secret_key,
         )

@@ -110,6 +110,22 @@ class Database_ipi_ch:
                     if self.settings.debug:
                         break
 
+            try:
+
+                upload_to_minio(self.bucket, self.destination_folder, self.output_file)
+
+            except:
+                self.logger.exception(self.output_file)
+
+            try:
+                upload_to_minio(
+                    self.bucket,
+                    self.last_cursor_destination,
+                    self.settings.last_cursor_file,
+                )
+            except:
+                self.logger.exception(self.settings.last_cursor_file)
+
     def generate_string(self, num1):
         return f"Scraped {num1} / {self.total_items} "
 

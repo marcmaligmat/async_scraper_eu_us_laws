@@ -13,18 +13,51 @@ from post_data import post_data_from_oldest
 
 import re
 import requests
+from minio import Minio
 import os
 
 console = Console()
 pretty.install()
 
+from Logger import _logger
+
+
+def upload_to_minio(bucket, destination, filename):
+    client = Minio(
+        os.getenv("s3_endpoint"),
+        access_key=os.getenv("s3_access_key"),
+        secret_key=os.getenv("s3_secret_key"),
+    )
+
+    if not client.bucket_exists(bucket):
+        client.make_bucket(bucket)
+    else:
+        print(f"Bucket {bucket} already exists")
+
+    client.fput_object(
+        bucket,
+        destination,
+        filename,
+    )
+    print(
+        f"'{destination}' is successfully uploaded as "
+        f"object '{filename}' to bucket '{bucket}'."
+    )
+
 
 class Database_ipi_ch:
     def scrape(self):
+
         self.settings = Settings()
         self.session = requests.Session()
-
+        self.logger = _logger(self.settings.error_file)
         self.output_file = self.settings.output_file
+
+        self.bucket = self.settings.bucket
+        self.destination_folder = self.settings.destination_folder
+        self.last_cursor_destination = self.settings.last_cursor_destination
+        self.output_file = self.settings.output_file
+
         os.makedirs(os.path.dirname(self.output_file), exist_ok=True)
 
         cursor = {"last_cursor": "*", "page_number": 0, "expected_results": 0}
@@ -46,39 +79,36 @@ class Database_ipi_ch:
             with open(self.output_file, "a+") as f:
 
                 for _ in range(self.loop):
-                    self.send_post(cursor["last_cursor"])
-                    api_results = self.response.json()["results"]
+                    try:
+                        self.send_post(cursor["last_cursor"])
+                        api_results = self.response.json()["results"]
 
-                    results = ""
-                    for result in api_results:
-                        if "bild_screen_hash__type_string_mv" in result.keys():
-                            result["base64_logo"] = [
-                                self.base64_decoded_utf8(
-                                    result["bild_screen_hash__type_string_mv"][0]
-                                )
-                            ]
-                        results += json.dumps(result) + "\n"
+                        results = ""
+                        for result in api_results:
+                            if "bild_screen_hash__type_string_mv" in result.keys():
+                                result["base64_logo"] = [
+                                    self.base64_decoded_utf8(
+                                        result["bild_screen_hash__type_string_mv"][0]
+                                    )
+                                ]
+                            results += json.dumps(result) + "\n"
 
-                        num += 1
-                        live.update(self.generate_string(num))
-                    f.write(results)
+                            num += 1
+                            live.update(self.generate_string(num))
+                        f.write(results)
 
-                    cursor = {
-                        "last_cursor": self.get_next_cursor(),
-                        "page_number": cursor["page_number"] + 1,
-                        "expected_results": cursor["expected_results"]
-                        + self.settings.page_size,
-                    }
-                    self.save_last_cursor(cursor)
+                        cursor = {
+                            "last_cursor": self.get_next_cursor(),
+                            "page_number": cursor["page_number"] + 1,
+                            "expected_results": cursor["expected_results"]
+                            + self.settings.page_size,
+                        }
+                        self.save_last_cursor(cursor)
+                    except:
+                        self.logger.exception(cursor["last_cursor"])
+
                     if self.settings.debug:
                         break
-
-        self.settings.upload_to_minio(
-            self.settings.s3_endpoint,
-            self.settings.s3_access_key,
-            self.settings.s3_secret_key,
-            self.settings.bucket,
-        )
 
     def generate_string(self, num1):
         return f"Scraped {num1} / {self.total_items} "

@@ -2,81 +2,83 @@ from absl import app, flags
 from lxml import html
 from time import sleep
 
+import dj_scrape.core
+
+from loguru import logger
+import base64
+
 import requests
 
-from rich.live import Live
-from rich.console import Console
 from urllib.parse import urljoin
 
-from Logger import _logger
 import json
 import os
 import re
 
 
-console = Console()
+class Takeover_ch(dj_scrape.core.MongoMixin, dj_scrape.core.Scraper):
+    ROOT_URL = 'https://www.takeover.ch'
 
-FLAGS = flags.FLAGS
-flags.DEFINE_boolean('debug', False, 'Produces debugging output.')
-flags.DEFINE_string('files_folder', 'output', 'Files Folder.')
-flags.DEFINE_string('output_file', './output.jsonl', 'Name of the output file.')
-flags.DEFINE_string('errorlog_file', './error.log', 'Name of the file.')
+    class Settings(dj_scrape.core.Scraper.Settings):
+        num_workers = 4
+        http_pause_seconds = .05
 
+    async def initialize(self, context):
+        await dj_scrape.core.MongoMixin.initialize(self, context)
+        start_url = urljoin(self.ROOT_URL, '/transactions/all')
+        async with await context.http_request(start_url) as response:
+            tree = html.fromstring(html=await response.text())
+        links = tree.xpath('//article[@class="transaction list-item"]//a/@href')
+        for link in links:
+            await context.enqueue_request(link)
 
-class Takeover_ch():
-    def __init__(self):
-        self.root_url = 'https://www.takeover.ch'
-        self.files_folder = FLAGS.files_folder
-        self.output_file = FLAGS.output_file
-        self.logger = _logger(FLAGS.errorlog_file)
+    async def handle_request(self, request, context):
+        request_url = urljoin(self.ROOT_URL, request)
+        async with await context.http_request(request_url) as response:
+            entry = await self.parse(context, request_url, await response.text())
+            if entry is not None:
+                await context.enqueue_result(entry)
 
-    def scrape(self):
-        for links in list(self.get_links()[::-1]):
-            url = urljoin(self.root_url,links)
-            print(f"Scraping {url}")
-            self.parse(url)
-            sleep(1)
+    async def handle_results(self, results, context):
+        collection = self.get_db().takeover_ch
+        for result in results:
+            url = result['url']
+            collection.replace_one({'_id': url}, {'_id': url, **result}, upsert=True)
         
-    def parse(self,url):
+    async def parse(self, context, url, response_text):
         try:
-            response = requests.get(url)
-            tree = html.fromstring(html=response.text)
+            tree = html.fromstring(html=response_text)
             transaction = tree.xpath('//h2/text()')[0]
             descriptions = tree.xpath('//div[@class="lead"]/p/text()')
             trx_properties = tree.xpath('//aside[@class="descriptors"]/text()')
             links = tree.xpath('//article[contains(@class,"list-item")]//a/@href')
             decisions_date = tree.xpath('//article[contains(@class,"list-item")]/div[@class="inner"]/span[1]/text()')
 
-            with open(self.output_file, 'a+') as f:
-                results = {
-                    'url': url,
-                    'transaction':transaction,
-                    'descriptions':descriptions,
-                    'transaction_properties':trx_properties
-                }
-                #remove indent=4 when production
-                f.write(json.dumps(results, indent=4, ensure_ascii=False) + '\n')
-            
-            n = 0
-            for dl_link in links:
-                if 'contentelements' in dl_link:
-                    self.save_pdf(dl_link,url,decisions_date[n])
-                    n+=1
+            entry = {
+                'url': url,
+                'transaction':transaction,
+                'descriptions':descriptions,
+                'transaction_properties':trx_properties,
+                'files': {},
+            }
+
+            for n, dl_link in enumerate(l for l in links if 'contentelements' in l):
+                name, content = await self.get_pdf(context, dl_link,url,decisions_date[n])
+                entry['files'][name] = base64.b64encode(content)
+
+            return entry
         except:
-            self.logger.exception(url)
+            logger.exception(url)
 
 
-    def save_pdf(self,dl_link,url,date):
-        dl_link = urljoin(self.root_url,dl_link)
+    async def get_pdf(self,context, dl_link,url,date):
+        dl_link = urljoin(self.ROOT_URL,dl_link)
         trx_number = self.get_trx_number(url)
         file_lang = self.get_file_lang(dl_link)
-        response = requests.get(dl_link.replace('\\',''))
-        filepath = f"{self.files_folder}/nr{trx_number}/{date}-{file_lang}.pdf"
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-
-        with open(filepath, 'wb') as f:
-            f.write(response.content)
-            f.close()
+        file_url = dl_link.replace('\\','')
+        filename = f"nr{trx_number}-{date}-{file_lang}.pdf"
+        async with await context.http_request(file_url) as response:
+            return filename, await response.read()
 
     def get_trx_number(self,url):
         number = re.search(r'\/nr\/(\d+)',url)
@@ -86,15 +88,9 @@ class Takeover_ch():
         language = re.search(r'\/lang\/([a-zA-Z]+)',dl_link)
         return language[1]
 
-    def get_links(self):
-        start_url = 'https://www.takeover.ch/transactions/all'
-        response = requests.get(start_url)
-        tree = html.fromstring(html=response.text)
-        return tree.xpath('//article[@class="transaction list-item"]//a/@href')
-
 def main(_):
-    console.print("Initializing!", style="green on black")
-    Takeover_ch().scrape()
+    scraper = Takeover_ch()
+    dj_scrape.core.run_scraper(scraper)
 
 if __name__ == '__main__':
     app.run(main)

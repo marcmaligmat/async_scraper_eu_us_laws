@@ -23,10 +23,12 @@ The scraper object has methods to enqueue new requests, or enqueue results, and 
 
 ## Web requests
 Are built upon `aiohttp` which is very similar to `requests`, just async.
+[aiohttp docs](https://docs.aiohttp.org/en/stable/)
 
 
 ## Database
 Is build upon `aiocouch`, an async library to interface with couchdb.
+[aiocouch docs](https://aiocouch.readthedocs.io/en/stable/index.html)
 
 
 ## Settings

@@ -1,31 +1,26 @@
 from absl import app, flags
 from lxml import html
-from time import sleep
 
 import dj_scrape.core
 
 from loguru import logger
-import base64
-
-import requests
 
 from urllib.parse import urljoin
 
-import json
-import os
 import re
 
 
-class Takeover_ch(dj_scrape.core.MongoMixin, dj_scrape.core.Scraper):
-    ROOT_URL = 'https://www.takeover.ch'
+class Takeover_ch(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
+    ROOT_URL = "https://www.takeover.ch"
 
     class Settings(dj_scrape.core.Scraper.Settings):
-        num_workers = 4
-        http_pause_seconds = .05
+        num_request_workers = 4
+        num_results_workers = 1
+        http_pause_seconds = 0.05
 
     async def initialize(self, context):
-        await dj_scrape.core.MongoMixin.initialize(self, context)
-        start_url = urljoin(self.ROOT_URL, '/transactions/all')
+        await super().initialize(context)
+        start_url = urljoin(self.ROOT_URL, "/transactions/all")
         async with await context.http_request(start_url) as response:
             tree = html.fromstring(html=await response.text())
         links = tree.xpath('//article[@class="transaction list-item"]//a/@href')
@@ -35,62 +30,70 @@ class Takeover_ch(dj_scrape.core.MongoMixin, dj_scrape.core.Scraper):
     async def handle_request(self, request, context):
         request_url = urljoin(self.ROOT_URL, request)
         async with await context.http_request(request_url) as response:
-            entry = await self.parse(context, request_url, await response.text())
-            if entry is not None:
-                await context.enqueue_result(entry)
+            parsed = await self.parse(context, request_url, await response.text())
+            if parsed is not None:
+                await context.enqueue_result(parsed)
 
     async def handle_results(self, results, context):
-        collection = self.get_db().takeover_ch
-        for result in results:
-            url = result['url']
-            collection.replace_one({'_id': url}, {'_id': url, **result}, upsert=True)
-        
+        collection = await self.get_db("takeover_ch")
+        for entry, files in results:
+            url = entry["url"]
+            async with self.get_doc(collection, url) as doc:
+                doc.update(entry)
+            for file_name, file_content in files.items():
+                await doc.attachment(file_name).save(file_content, "application/pdf")
+
     async def parse(self, context, url, response_text):
         try:
             tree = html.fromstring(html=response_text)
-            transaction = tree.xpath('//h2/text()')[0]
+            transaction = tree.xpath("//h2/text()")[0]
             descriptions = tree.xpath('//div[@class="lead"]/p/text()')
             trx_properties = tree.xpath('//aside[@class="descriptors"]/text()')
             links = tree.xpath('//article[contains(@class,"list-item")]//a/@href')
-            decisions_date = tree.xpath('//article[contains(@class,"list-item")]/div[@class="inner"]/span[1]/text()')
+            decisions_date = tree.xpath(
+                '//article[contains(@class,"list-item")]/div[@class="inner"]/span[1]/text()'
+            )
 
             entry = {
-                'url': url,
-                'transaction':transaction,
-                'descriptions':descriptions,
-                'transaction_properties':trx_properties,
-                'files': {},
+                "url": url,
+                "transaction": transaction,
+                "descriptions": descriptions,
+                "transaction_properties": trx_properties,
             }
+            files = {}
 
-            for n, dl_link in enumerate(l for l in links if 'contentelements' in l):
-                name, content = await self.get_pdf(context, dl_link,url,decisions_date[n])
-                entry['files'][name] = base64.b64encode(content)
+            for n, dl_link in enumerate(l for l in links if "contentelements" in l):
+                name, content = await self.get_pdf(
+                    context, dl_link, url, decisions_date[n]
+                )
+                files[name] = content
 
-            return entry
+            return entry, files
         except:
             logger.exception(url)
 
-
-    async def get_pdf(self,context, dl_link,url,date):
-        dl_link = urljoin(self.ROOT_URL,dl_link)
+    async def get_pdf(self, context, dl_link, url, date):
+        dl_link = urljoin(self.ROOT_URL, dl_link)
         trx_number = self.get_trx_number(url)
         file_lang = self.get_file_lang(dl_link)
-        file_url = dl_link.replace('\\','')
+        file_url = dl_link.replace("\\", "")
         filename = f"nr{trx_number}-{date}-{file_lang}.pdf"
         async with await context.http_request(file_url) as response:
             return filename, await response.read()
 
-    def get_trx_number(self,url):
-        number = re.search(r'\/nr\/(\d+)',url)
+    def get_trx_number(self, url):
+        number = re.search(r"\/nr\/(\d+)", url)
         return number[1]
 
-    def get_file_lang(self,dl_link):
-        language = re.search(r'\/lang\/([a-zA-Z]+)',dl_link)
+    def get_file_lang(self, dl_link):
+        language = re.search(r"\/lang\/([a-zA-Z]+)", dl_link)
         return language[1]
+
 
 def main(_):
     scraper = Takeover_ch()
     dj_scrape.core.run_scraper(scraper)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     app.run(main)

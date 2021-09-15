@@ -18,11 +18,10 @@ setup(
     author_email='',
     description='',
     install_requires=[
-        'absl-py',
         'aiohttp',
-        'pydantic',
         'motor',
-        'mongomock',
+        'aiocouch',
+        'pydantic',
         'loguru',
         ],
 )

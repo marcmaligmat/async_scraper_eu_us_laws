@@ -5,9 +5,9 @@ from absl.testing import absltest
 from contextlib import asynccontextmanager
 from unittest.mock import patch, MagicMock
 
-from dj_scrape.core import Scraper, run_scraper, MongoMixin
+from dj_scrape.core import Scraper, run_scraper, CouchDBMixin
 
-import mongomock
+from aiocouch.document import Document
 
 def mock_aio(text_response):
     @asynccontextmanager
@@ -34,12 +34,16 @@ class SimpleScraper(Scraper):
         self.results.extend(results)
 
 
-class MongoScraper(MongoMixin, SimpleScraper):
-    class MongoSettings(MongoMixin.MongoSettings):
-        mongodb_connection_string = 'mongodb://localhost:27017'
-        mongodb_database_name = 'scrape'
+class CouchDBScraper(CouchDBMixin, SimpleScraper):
+    class CouchDBSettings(CouchDBMixin.CouchDBSettings):
+        couchdb_url: str = 'http://localhost:5984'
+        couchdb_user: str = 'admin'
+        couchdb_password: str = 'MDJhNjJmNTc1N2EyZDY4NDg2YTQ1YjY2OWVlMGE4NGY'
     async def handle_results(self, results, context):
-        await self.get_db().test_collection.insert_many({'greeting': r} for r in results)
+        collection = await self.get_db('test_collection')
+        for idx, r in enumerate(results):
+            async with Document(collection, str(idx)) as doc:
+                doc['greeting'] = r
     
 
 class UnitTest(absltest.TestCase):
@@ -55,7 +59,7 @@ class UnitTest(absltest.TestCase):
         self.assertEqual(scraper.results[0], 'hello')
 
     def test_mongo_scraper(self):
-        scraper = MongoScraper()
+        scraper = CouchDBScraper()
         with patch('aiohttp.ClientSession.get', mock_aio('hello')):
             run_scraper(scraper)
 

@@ -33,15 +33,19 @@ class Scraper:
         self._last_http_request = 0.0
 
     async def initialize(self):
+        """Put initial requests into the queue via `enqueue_request`."""
         pass
 
     async def finalize(self):
+        """Clean up. (Optional)"""
         pass
 
     async def handle_request(self, request: Any):
+        """Handles one request. A request can be of any type. This function should make one or multiple web requests, enqueue more requests, and also enqueue results."""
         pass
 
     async def handle_results(self, results: list):
+        """Handles a batch of results. This function should store the results, possibly in a database. This function may make web requests, but should not enqueue more requests."""
         pass
 
     def __repr__(self):

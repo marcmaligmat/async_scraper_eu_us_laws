@@ -20,6 +20,12 @@ Every scraper is required to implement `initialize`, where initial requests are 
 
 The scraper object has methods to enqueue new requests, or enqueue results, and also to do web request. Do not use the `_web_session` directly.
 
+Here is the core workflow:
+- in `initialize`, enqueue the initial requests. Requests in the queue (and results in the results queue) can be any object type, for example strings, or dicts, or complex objects.
+- in `handle_request`, you get one request (whatever you put into the queue). The goal here is to make web requests to get all data necessary. Multiple web requests can be made here. Also, further requests can be enqueued. For example, if the request just points to a page that lists documents, then in this function, we would make a web request to get the page, then parse it, then put each of the links to the documents back into the requests queue. However, if the request points to some piece of data we want to save, then we make web requests to get that data (maybe multiple), and then put the result into the results queue.
+- in `handle_results`, you get a list of results (the framework automatically makes batches, but not guaranteed to be of the same size always) and the idea here is that we store them into the database.
+- at any point, it's completely ok to make database calls to check, for example, if the document already exists, but it's not necessary.
+
 
 ## Web requests
 Are built upon `aiohttp` which is very similar to `requests`, just async.

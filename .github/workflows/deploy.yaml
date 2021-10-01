@@ -5,7 +5,7 @@ on:
         branches: [ master ]
 
 env:
-    IMAGE_NAME: web_snaptype
+    IMAGE_NAME: scrapers
     IMAGE_TAG: dev
 
 jobs:

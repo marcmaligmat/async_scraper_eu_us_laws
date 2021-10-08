@@ -3,7 +3,6 @@ output/
 output.json
 output.jsonl
 .vscode
-test*
 last_cursor.txt
 decoded_image.png
 last_cursor*

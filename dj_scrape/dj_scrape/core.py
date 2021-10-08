@@ -87,16 +87,25 @@ class Scraper:
             if time_to_pause > 0:
                 await asyncio.sleep(time_to_pause)
             self._last_http_request = time.time()
-        if not any(d is not None for d in (json_data, post_data, files)):
-            return self._web_session.get(url=url, params=query_params)
+
+        if all(d is None for d in (json_data, post_data, files)):
+            req_kwargs = {
+                'method': 'GET',
+                'url': url,
+                'params': query_params,
+
+            }
         else:
-            return self._web_session.post(
-                url=url,
-                json=json_data,
-                data=post_data,
-                files=files,
-                params=query_params,
-            )
+            req_kwargs = {
+                'method': 'POST',
+                'url': url,
+                'json': json_data,
+                'data': post_data,
+                'files': files,
+                'params': query_params,
+            }
+
+        return self._web_session.request(**req_kwargs)
 
 
 
@@ -113,6 +122,7 @@ class MongoMixin(Scraper):
         self.mongo_client = motor.motor_asyncio.AsyncIOMotorClient(
             self.mongo_settings.mongodb_connection_string
         )
+        await super().initialize()
 
     def get_db(self):
         return self.mongo_client[self.mongo_settings.mongodb_database_name]
@@ -161,7 +171,8 @@ async def _request_worker(scraper: Scraper, worker_id: int):
             logger.exception(f"Failed to handle request: {request}")
             if scraper.scraper_settings.debug:
                 raise SystemExit(1)
-        scraper._request_queue.task_done()
+        finally:
+            scraper._request_queue.task_done()
 
 
 async def _results_worker(scraper: Scraper, worker_id: int):

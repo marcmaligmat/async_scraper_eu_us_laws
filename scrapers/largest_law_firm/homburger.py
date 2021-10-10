@@ -8,17 +8,12 @@ from loguru import logger
 
 from urllib.parse import urljoin
 
-import aiohttp
-import aiofiles
-
-import base64
-import os
 import re
 
 
-class Takeover_ch(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
+class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     ROOT_URL = "https://homburger.ch/"
-    NAME = "homburger_ch"
+    DB_NAME = "homburger_people"
 
     class ScraperSettings(dj_scrape.core.Scraper.ScraperSettings):
         num_request_workers = 1
@@ -34,7 +29,6 @@ class Takeover_ch(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             '//a[@class="lawyers__lawyer__link"]/@href')
         for link in links:
             await self.enqueue_request(link)
-            break
 
     async def handle_request(self, request):
         request_url = urljoin(self.ROOT_URL, request)
@@ -44,49 +38,43 @@ class Takeover_ch(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 await self.enqueue_result(parsed)
 
     async def handle_results(self, results):
-        collection = await self.get_db(self.NAME)
-        for entry, files in results:
+        collection = await self.get_db(self.DB_NAME)
+        for entry, attachments in results:
             url = entry["url"]
             async with self.get_doc(collection, url) as doc:
                 doc.update(entry)
-            for file_name, file_content in files.items():
-                await doc.attachment(file_name).save(file_content, "application/pdf")
+            for file_name, file_content in attachments.items():
+                await doc.attachment(file_name).save(file_content, "image/jpg")
 
     async def parse(self, url, response_text):
         try:
             tree = html.fromstring(html=response_text)
 
             # entries
-            person = re.search(r"team\/(.+)", url).group(1)
+            person = self.get_name(url)
+
+            img_link = tree.xpath("//picture/source/@srcset")[0]
+
             portrait = tree.xpath(
                 '//div[contains(@class,"lawyer__portrait--screen")]//text()'
             )[0]
 
             career = tree.xpath('//div[@data-print="Career"]//text()')
-            career = [" ".join(x) for x in zip(career[0::2], career[1::2])]
+            career = [x for x in zip(career[0::2], career[1::2])]
 
             area_of_expertise = tree.xpath(
                 '(//div[contains(@class,"lawyer__expertise")])[1]//a/text()'
             )
 
-            image_url = urljoin(
-                self.ROOT_URL, tree.xpath("//picture/source/@srcset")[0]
-            )
             bulletin_links = tree.xpath(
                 '//div[@class="bulletin-teaser__content"]/a/@href'
             )
 
-            bulletin_links = [urljoin(self.ROOT_URL, ele)
-                              for ele in bulletin_links]
-
             bulletins = []
-            for link in bulletin_links:
-                response = await self.enqueue_request(link)
-                tree = html.fromstring(html=await response.text)
-                article = tree.xpath(
-                    '//section[@class="bulletin__content"]//text()'
-                )
-                bulletins.append(article)
+            if bulletin_links:
+                for link in bulletin_links:
+                    content = await self.get_bulletin(link)
+                    bulletins.append(content)
 
             entry = {
                 "url": url,
@@ -96,25 +84,45 @@ class Takeover_ch(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 "area_of_expertise": area_of_expertise,
                 "bulletins": bulletins,
             }
+            attachments = {}
 
-            files = {"image": person}
-            await self.save_image(image_url, person)
+            fname, fcontent = await self.get_img(img_link, url)
+            attachments[fname] = fcontent
 
-            return entry, files
+            return entry, attachments
         except:
             logger.exception(url)
 
-    async def save_image(self, image_url, person):
-        async with aiohttp.ClientSession() as session:
-            async with session.get(image_url) as resp:
-                if resp.status == 200:
-                    f = await aiofiles.open(f'{person}.jpg', mode='wb')
-                    await f.write(await resp.read())
-                    await f.close()
+    def get_name(self, url):
+        name = re.search(r"team\/([\w-]+)", url)
+        return name.group(1)
+
+    async def get_img(self, dl_link, url):
+        dl_link = urljoin(self.ROOT_URL, dl_link)
+        file_url = dl_link.replace("\\", "")
+        filename = self.get_name(url)
+        async with await self.http_request(file_url) as resp:
+            return filename, await resp.read()
+
+    async def get_bulletin(self, dl_link):
+        dl_link = urljoin(self.ROOT_URL, dl_link)
+        dl_url = dl_link.replace("\\", "")
+        async with await self.http_request(dl_url) as resp:
+            resp_text = await resp.text()
+            try:
+                tree = html.fromstring(html=resp_text)
+                content = " ".join(
+                    tree.xpath(
+                        '//section[@class="bulletin__content"]//text()'
+                    )
+                )
+                return content
+            except:
+                logger.exception(dl_url)
 
 
 def main(_):
-    scraper = Takeover_ch()
+    scraper = HomburgerPeople()
     dj_scrape.core.run_scraper(scraper)
 
 

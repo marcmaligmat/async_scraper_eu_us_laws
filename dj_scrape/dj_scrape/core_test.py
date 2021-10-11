@@ -56,13 +56,13 @@ class UnitTest(absltest.TestCase):
     def test_simple_scraper(self):
         scraper = SimpleScraper()
         self.assertEqual(scraper.simple_settings.additional_setting, 'bla')
-        with patch('aiohttp.ClientSession.get', mock_aio('hello')):
+        with patch('aiohttp.ClientSession.request', mock_aio('hello')):
             run_scraper(scraper)
         self.assertEqual(scraper.results[0], 'hello')
 
-    def test_mongo_scraper(self):
+    def test_couchdb_scraper(self):
         scraper = CouchDBScraper()
-        with patch('aiohttp.ClientSession.get', mock_aio('hello')):
+        with patch('aiohttp.ClientSession.request', mock_aio('hello')):
             run_scraper(scraper)
 
 if __name__ == '__main__':

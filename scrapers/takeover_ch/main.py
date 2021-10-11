@@ -41,6 +41,8 @@ class Takeover_ch(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             async with self.get_doc(collection, url) as doc:
                 doc.update(entry)
             for file_name, file_content in files.items():
+                # second argument of save() method is the media-type, see
+                # https://en.wikipedia.org/wiki/Media_type for examples
                 await doc.attachment(file_name).save(file_content, "application/pdf")
 
     async def parse(self, url, response_text):

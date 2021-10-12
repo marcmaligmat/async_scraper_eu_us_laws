@@ -30,7 +30,7 @@ class SimpleScraper(Scraper):
     async def initialize(self):
         await self.enqueue_request(dict(url='https://deepjudge.ai'))
     async def handle_request(self, request):
-        async with await self.http_request(request['url']) as resp:
+        async with self.http_request(request['url']) as resp:
             await self.enqueue_result(await resp.text())
     async def handle_results(self, results):
         self.results.extend(results)

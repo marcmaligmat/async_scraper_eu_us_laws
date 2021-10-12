@@ -28,7 +28,6 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         links = tree.xpath('//a[contains(@href,"/docs")]/@href')
         for link in links:
             await self.enqueue_request(link)
-            print(link)
 
     async def handle_request(self, request):
         request_url = urljoin(self.ROOT_URL, request)

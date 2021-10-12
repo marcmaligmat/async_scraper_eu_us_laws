@@ -11,13 +11,12 @@ import pydantic
 from aiocouch.document import Document
 
 def mock_aio(text_response):
-    @asynccontextmanager
     async def _f(*args, **kwargs):
         mock = MagicMock()
         async def _text():
             return text_response
         mock.text = _text
-        yield mock
+        return mock
     return _f
 
 class SimpleScraper(Scraper):
@@ -29,6 +28,7 @@ class SimpleScraper(Scraper):
         self.results = []
     async def initialize(self):
         await self.enqueue_request(dict(url='https://deepjudge.ai'))
+        await super().initialize()
     async def handle_request(self, request):
         async with self.http_request(request['url']) as resp:
             await self.enqueue_result(await resp.text())
@@ -61,9 +61,9 @@ class UnitTest(absltest.TestCase):
         self.assertEqual(scraper.results[0], 'hello')
 
     def test_couchdb_scraper(self):
+        # Note: ./run_couchdb.sh in scrapers/test_utils/couch_db needs to be running
         scraper = CouchDBScraper()
-        with patch('aiohttp.ClientSession.request', mock_aio('hello')):
-            run_scraper(scraper)
+        run_scraper(scraper)
 
 if __name__ == '__main__':
     absltest.main()

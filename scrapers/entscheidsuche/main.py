@@ -23,7 +23,7 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     async def initialize(self):
         await super().initialize()
         start_url = urljoin(self.ROOT_URL, "/docs/")
-        async with await self.http_request(start_url) as response:
+        async with self.http_request(start_url) as response:
             tree = html.fromstring(html=await response.text())
         links = tree.xpath('//a[contains(@href,"/docs")]/@href')
         for link in links:
@@ -31,8 +31,7 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
     async def handle_request(self, request):
         request_url = urljoin(self.ROOT_URL, request)
-        print(request_url)
-        async with await self.http_request(request_url) as response:
+        async with self.http_request(request_url) as response:
             parsed = await self.parse(request_url, await response.text())
             if parsed is not None:
                 await self.enqueue_result(parsed)
@@ -75,10 +74,9 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
     async def get_file(self, dl_link):
         dl_link = urljoin(self.ROOT_URL, dl_link)
-        print(dl_link)
         file_url = dl_link.replace("\\", "")
         filename = dl_link
-        async with await self.http_request(file_url) as resp:
+        async with self.http_request(file_url) as resp:
             return filename, await resp.read()
 
 

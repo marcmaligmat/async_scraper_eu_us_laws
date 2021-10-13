@@ -80,6 +80,7 @@ class Scraper:
         json_data: dict = None,
         post_data: Union[dict, str, bytes, aiohttp.FormData] = None,
         files: dict = None,
+        headers: dict = None,
     ):
         async with self._http_lock:
             current_time = time.time()
@@ -107,7 +108,6 @@ class Scraper:
             }
 
         yield await self._web_session.request(**req_kwargs)
-
 
 
 class MongoMixin(Scraper):
@@ -159,7 +159,6 @@ class CouchDBMixin(Scraper):
     async def get_doc(self, db, doc_id):
         async with aiocouch.document.Document(db, doc_id) as doc:
             yield doc
-
 
 
 async def _request_worker(scraper: Scraper, worker_id: int):

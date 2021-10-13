@@ -79,11 +79,14 @@ class Scraper:
         json_data: dict = None,
         post_data: Union[dict, str, bytes, aiohttp.FormData] = None,
         files: dict = None,
+        headers: dict = None,
     ):
         async with self._http_lock:
             current_time = time.time()
             time_since_last_request = current_time - self._last_http_request
-            time_to_pause = self.scraper_settings.http_pause_seconds - time_since_last_request
+            time_to_pause = (
+                self.scraper_settings.http_pause_seconds - time_since_last_request
+            )
             if time_to_pause > 0:
                 await asyncio.sleep(time_to_pause)
             self._last_http_request = time.time()
@@ -94,10 +97,10 @@ class Scraper:
                 url=url,
                 json=json_data,
                 data=post_data,
-                files=files,
+                # files=files,
                 params=query_params,
+                headers=headers,
             )
-
 
 
 class MongoMixin(Scraper):
@@ -150,7 +153,6 @@ class CouchDBMixin(Scraper):
             yield doc
 
 
-
 async def _request_worker(scraper: Scraper, worker_id: int):
     logger.info(f"Starting request worker {worker_id}")
     while True:
@@ -184,7 +186,10 @@ async def _results_worker(scraper: Scraper, worker_id: int):
             result = await scraper._results_queue.get()
             try:
                 results_batch.append(result)
-                if len(results_batch) >= scraper.scraper_settings.max_results_batch_size:
+                if (
+                    len(results_batch)
+                    >= scraper.scraper_settings.max_results_batch_size
+                ):
                     results = results_batch[:]
                     results_batch = []
                     await _handle_batch(results)
@@ -210,9 +215,7 @@ async def _run_scraper(scraper):
         await scraper.initialize()
         workers = []
         workers.append(
-            asyncio.create_task(
-                _logging_worker(scraper), name="logging_worker"
-            )
+            asyncio.create_task(_logging_worker(scraper), name="logging_worker")
         )
         workers.extend(
             [

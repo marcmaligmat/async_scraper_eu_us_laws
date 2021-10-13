@@ -23,7 +23,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     async def initialize(self):
         await super().initialize()
         start_url = urljoin(self.ROOT_URL, "/en/team")
-        async with await self.http_request(start_url) as response:
+        async with self.http_request(start_url) as response:
             tree = html.fromstring(html=await response.text())
         links = tree.xpath(
             '//a[@class="lawyers__lawyer__link"]/@href')
@@ -32,7 +32,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
     async def handle_request(self, request):
         request_url = urljoin(self.ROOT_URL, request)
-        async with await self.http_request(request_url) as response:
+        async with self.http_request(request_url) as response:
             parsed = await self.parse(request_url, await response.text())
             if parsed is not None:
                 await self.enqueue_result(parsed)
@@ -101,13 +101,13 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         dl_link = urljoin(self.ROOT_URL, dl_link)
         file_url = dl_link.replace("\\", "")
         filename = self.get_name(url)
-        async with await self.http_request(file_url) as resp:
+        async with self.http_request(file_url) as resp:
             return filename, await resp.read()
 
     async def get_bulletin(self, dl_link):
         dl_link = urljoin(self.ROOT_URL, dl_link)
         dl_url = dl_link.replace("\\", "")
-        async with await self.http_request(dl_url) as resp:
+        async with self.http_request(dl_url) as resp:
             resp_text = await resp.text()
             try:
                 tree = html.fromstring(html=resp_text)

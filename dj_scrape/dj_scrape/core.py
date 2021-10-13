@@ -72,6 +72,7 @@ class Scraper:
     async def enqueue_result(self, result: Any):
         return await self._results_queue.put(result)
 
+    @contextlib.asynccontextmanager
     async def http_request(
         self,
         url: str,
@@ -105,7 +106,7 @@ class Scraper:
                 'params': query_params,
             }
 
-        return self._web_session.request(**req_kwargs)
+        yield await self._web_session.request(**req_kwargs)
 
 
 

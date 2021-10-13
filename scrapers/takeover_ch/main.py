@@ -21,7 +21,7 @@ class Takeover_ch(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     async def initialize(self):
         await super().initialize()
         start_url = urljoin(self.ROOT_URL, "/transactions/all")
-        async with await self.http_request(start_url) as response:
+        async with self.http_request(start_url) as response:
             tree = html.fromstring(html=await response.text())
         links = tree.xpath('//article[@class="transaction list-item"]//a/@href')
         for link in links:
@@ -29,7 +29,7 @@ class Takeover_ch(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
     async def handle_request(self, request):
         request_url = urljoin(self.ROOT_URL, request)
-        async with await self.http_request(request_url) as response:
+        async with self.http_request(request_url) as response:
             parsed = await self.parse(request_url, await response.text())
             if parsed is not None:
                 await self.enqueue_result(parsed)
@@ -80,7 +80,7 @@ class Takeover_ch(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         file_lang = self.get_file_lang(dl_link)
         file_url = dl_link.replace("\\", "")
         filename = f"nr{trx_number}-{date}-{file_lang}.pdf"
-        async with await self.http_request(file_url) as response:
+        async with self.http_request(file_url) as response:
             return filename, await response.read()
 
     def get_trx_number(self, url):

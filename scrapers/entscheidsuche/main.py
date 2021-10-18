@@ -42,7 +42,7 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         current_link = ""
         attachments = []
         entry = {}
-        self.original_link = ""
+        original_link = ""
         for _link in file_links:
             __link = re.sub(r"\.\w+$", "", _link)
             folder = re.search(r"\/docs\/([^\/]+)", __link).group(1)
@@ -52,7 +52,7 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             if current_link != __link:
 
                 if current_link != "":
-                    l = re.sub(r"\/.+\/", "", self.original_link)
+                    l = re.sub(r"\/.+\/", "", original_link)
                     entry["id"] = re.sub(r"\.\w+$", "", l)
 
                     parsed = await self.parse(request_url, entry)
@@ -63,7 +63,7 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 attachments = [_link]
 
             else:
-                self.original_link = _link
+                original_link = _link
                 attachments.append(_link)
 
     async def parse(self, url, entry):

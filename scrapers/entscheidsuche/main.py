@@ -29,24 +29,33 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         links = tree.xpath('//a[contains(@href,"/docs")]/@href')
 
         for link in links:
-            if "." in link:
-                continue
+            print(link)
+            # if not link.endswith("/"):
+            #     continue
+            # if link.endswith('/Sitemaps/'):
+            #     continue
+            # if link.endswith('/Index/'):
+            #     continue
 
-            request_url = urljoin(self.ROOT_URL, link)
-            async with self.http_request(request_url) as response:
-                response_text = await response.text()
+            # if "." in link:
+            #     continue
 
-            tree = html.fromstring(html=response_text)
-            file_links = tree.xpath(
-                '//a[contains(@href,"/docs") and text() != "Parent Directory"]/@href'
-            )
+            # logger.info(f'initializing {link=}')
+            # request_url = urljoin(self.ROOT_URL, link)
+            # async with self.http_request(request_url) as response:
+            #     response_text = await response.text()
 
-            # get distinct links
-            distinct_links = list(dict.fromkeys(
-                map(self.remove_extension, file_links)))
+            # tree = html.fromstring(html=response_text)
+            # file_links = tree.xpath(
+            #     '//a[contains(@href,"/docs") and text() != "Parent Directory"]/@href'
+            # )
 
-            for distinct_link in distinct_links:
-                await self.enqueue_request(distinct_link)
+            # # get distinct links
+            # distinct_links = list(dict.fromkeys(
+            #     map(self.remove_extension, file_links)))
+
+            # for distinct_link in distinct_links:
+            #     await self.enqueue_request(distinct_link)
 
     async def handle_request(self, request):
         parsed = await self.parse(request)

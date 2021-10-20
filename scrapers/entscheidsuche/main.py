@@ -1,14 +1,14 @@
-from absl import app, flags
 
-from lxml import html
-
-import dj_scrape.core
+import mimetypes
+import re
+from urllib.parse import urljoin
 
 from loguru import logger
 
-from urllib.parse import urljoin
+import dj_scrape.core
 
-import re
+from lxml import html
+from absl import app, flags
 
 
 class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
@@ -28,34 +28,26 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             tree = html.fromstring(html=await response.text())
         links = tree.xpath('//a[contains(@href,"/docs")]/@href')
 
-        for link in links:
-            print(link)
-            # if not link.endswith("/"):
-            #     continue
-            # if link.endswith('/Sitemaps/'):
-            #     continue
-            # if link.endswith('/Index/'):
-            #     continue
+        for link in links[:1]:
+            if "." in link:
+                continue
 
-            # if "." in link:
-            #     continue
+            logger.info(f'initializing {link=}')
+            request_url = urljoin(self.ROOT_URL, link)
+            async with self.http_request(request_url) as response:
+                response_text = await response.text()
 
-            # logger.info(f'initializing {link=}')
-            # request_url = urljoin(self.ROOT_URL, link)
-            # async with self.http_request(request_url) as response:
-            #     response_text = await response.text()
+            tree = html.fromstring(html=response_text)
+            file_links = tree.xpath(
+                '//a[contains(@href,"/docs") and text() != "Parent Directory"]/@href'
+            )
 
-            # tree = html.fromstring(html=response_text)
-            # file_links = tree.xpath(
-            #     '//a[contains(@href,"/docs") and text() != "Parent Directory"]/@href'
-            # )
+            # get distinct links
+            distinct_links = list(dict.fromkeys(
+                map(self.remove_extension, file_links)))
 
-            # # get distinct links
-            # distinct_links = list(dict.fromkeys(
-            #     map(self.remove_extension, file_links)))
-
-            # for distinct_link in distinct_links:
-            #     await self.enqueue_request(distinct_link)
+            for distinct_link in distinct_links:
+                await self.enqueue_request(distinct_link)
 
     async def handle_request(self, request):
         parsed = await self.parse(request)
@@ -97,13 +89,11 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 doc.update(entry)
 
             for file_name, file_content in attachments.items():
-                file_extension = (
-                    re.search(r"\.*?\w+$", file_name).group().replace(".", "")
-                )
-                if file_extension == "pdf":
-                    file_extension = "application/pdf"
-
-                await doc.attachment(file_name).save(file_content, file_extension)
+                extension = mimetypes.guess_type(file_name)[0]
+                if extension is not None:
+                    await doc.attachment(file_name).save(file_content, extension)
+                else:
+                    logger.exception(file_name)
 
     async def get_file(self, dl_link):
         dl_link = urljoin(self.ROOT_URL, dl_link)

@@ -28,7 +28,10 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             tree = html.fromstring(html=await response.text())
         links = tree.xpath('//a[contains(@href,"/docs")]/@href')
 
-        for link in links[:2]:
+        for link in links:
+            if "." in link:
+                continue
+
             request_url = urljoin(self.ROOT_URL, link)
             async with self.http_request(request_url) as response:
                 response_text = await response.text()

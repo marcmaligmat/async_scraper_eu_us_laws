@@ -28,8 +28,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         start_url = urljoin(self.ROOT_URL, "/en/team")
         async with self.http_request(start_url) as response:
             tree = html.fromstring(html=await response.text())
-        links = tree.xpath(
-            '//a[@class="lawyers__lawyer__link"]/@href')
+        links = tree.xpath('//a[@class="lawyers__lawyer__link"]/@href')
         for link in links[2:3]:
             logger.info(f"Initializing {link=}")
             await self.enqueue_request(link)
@@ -57,29 +56,20 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     async def parse(self, url, response_text):
         try:
             tree = html.fromstring(html=response_text)
-
-            person_id_tree = tree.xpath(
-                '//script[@id ="__NEXT_DATA__"]/text()')[0]
-
-            person_id = re.search(
-                r"\"ID\"\:\"(\d+)\"", person_id_tree).group(1)
+            person_id_tree = tree.xpath('//script[@id ="__NEXT_DATA__"]/text()')[0]
+            person_id = re.search(r"\"ID\"\:\"(\d+)\"", person_id_tree).group(1)
 
             # entries
             person = self.get_name(url)
-
             img_link = tree.xpath("//picture/source/@srcset")[0]
-
             portrait = tree.xpath(
                 '//div[contains(@class,"lawyer__portrait--screen")]//text()'
             )[0]
-
             career = tree.xpath('//div[@data-print="Career"]//text()')
             career = [x for x in zip(career[0::2], career[1::2])]
-
             area_of_expertise = tree.xpath(
                 '(//div[contains(@class,"lawyer__expertise")])[1]//a/text()'
             )
-
             bulletin_links = tree.xpath(
                 '//div[@class="bulletin-teaser__content"]/a/@href'
             )
@@ -91,6 +81,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                     bulletins.append(content)
 
             publications_raw = await self.query_publications_api(person_id)
+            publications = publications_raw["data"]["dd_publications_list"]["result"]
 
             entry = {
                 "url": url,
@@ -100,29 +91,26 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 "career": career,
                 "area_of_expertise": area_of_expertise,
                 "bulletins": bulletins,
-                # "publications": publications_raw
+                "publications": publications,
             }
             attachments = {}
 
             fname, fcontent = await self.get_img(img_link, url)
             attachments[fname] = fcontent
 
-            publications = publications_raw["data"]["dd_publications_list"]["result"]
             for publication in publications:
-                post_date = publication["post_date"]
                 title = publication["acf"]["title"]
                 try:
                     pdf_url = publication["acf"]["document"]["attachment_url"]
-                    u = pdf_url.split('/')
-                    true_pdf_link = urljoin("https://homburger.ch/api/ms/",
-                                            f"{u[0]}/{u[1]}/_/{u[-1]}")
+                    u = pdf_url.split("/")
+                    true_pdf_link = urljoin(
+                        "https://homburger.ch/api/ms/", f"{u[0]}/{u[1]}/_/{u[-1]}"
+                    )
                     dl_link, fcontent = await self.get_file(true_pdf_link)
                     attachments[dl_link] = fcontent
+                    logger.info(f"DOWNLOADING . . . {title}")
                 except:
                     logger.info(f"{title} has no pdf file")
-
-            # attachments[title] = {
-            #     'post_date': post_date, 'title': title, 'pdf_url': pdf_url}
 
             return entry, attachments
         except:
@@ -133,10 +121,22 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         return name.group(1)
 
     async def query_publications_api(self, person_id):
-        payload = {"operationName": "publications_filter", "variables": {"lang": "en", "expertise": None, "author": [
-            int(person_id)], "search": None, "cursor": "0", "pageSize": 1000}, "query": "fragment publication on Publications {\n  ID\n  lang\n  slug\n  translations {\n    de\n    en\n    __typename\n  }\n  post_date\n  acf {\n    title\n    text\n    external_link {\n      target\n      title\n      url\n      __typename\n    }\n    document {\n      ID\n      post_title\n      attachment_url\n      __typename\n    }\n    authors {\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery publications_filter($lang: String!, $author: [Int!], $expertise: [Int!], $search: String, $cursor: String, $pageSize: Int) {\n  dd_publications_list(lang: $lang, pageSize: $pageSize, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...publication\n      __typename\n    }\n    __typename\n  }\n}\n"}
+        payload = {
+            "operationName": "publications_filter",
+            "variables": {
+                "lang": "en",
+                "expertise": None,
+                "author": [int(person_id)],
+                "search": None,
+                "cursor": "0",
+                "pageSize": 1000,
+            },
+            "query": "fragment publication on Publications {\n  ID\n  lang\n  slug\n  translations {\n    de\n    en\n    __typename\n  }\n  post_date\n  acf {\n    title\n    text\n    external_link {\n      target\n      title\n      url\n      __typename\n    }\n    document {\n      ID\n      post_title\n      attachment_url\n      __typename\n    }\n    authors {\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery publications_filter($lang: String!, $author: [Int!], $expertise: [Int!], $search: String, $cursor: String, $pageSize: Int) {\n  dd_publications_list(lang: $lang, pageSize: $pageSize, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...publication\n      __typename\n    }\n    __typename\n  }\n}\n",
+        }
 
-        async with self.http_request("https://api.homburger.ch/", json_data=payload) as resp:
+        async with self.http_request(
+            "https://api.homburger.ch/", json_data=payload
+        ) as resp:
             return await resp.json()
 
     async def get_file(self, dl_link):
@@ -145,7 +145,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             async with self.http_request(file_url) as resp:
                 return dl_link, await resp.read()
         else:
-            return '', ''
+            return "", ""
 
     async def get_img(self, dl_link, url):
         dl_link = urljoin(self.ROOT_URL, dl_link)
@@ -161,9 +161,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             try:
                 tree = html.fromstring(html=resp_text)
                 content = " ".join(
-                    tree.xpath(
-                        '//section[@class="bulletin__content"]//text()'
-                    )
+                    tree.xpath('//section[@class="bulletin__content"]//text()')
                 )
                 return content
             except:
@@ -177,6 +175,3 @@ def main(_):
 
 if __name__ == "__main__":
     app.run(main)
-
-# publications show more
-# language german and english

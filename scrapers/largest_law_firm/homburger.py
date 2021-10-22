@@ -29,7 +29,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         async with self.http_request(start_url) as response:
             tree = html.fromstring(html=await response.text())
         links = tree.xpath('//a[@class="lawyers__lawyer__link"]/@href')
-        for link in links[2:3]:
+        for link in links:
             logger.info(f"Initializing {link=}")
             await self.enqueue_request(link)
 
@@ -61,39 +61,23 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
             # entries
             person = self.get_name(url)
-            img_link = tree.xpath("//picture/source/@srcset")[0]
-            portrait = tree.xpath(
-                '//div[contains(@class,"lawyer__portrait--screen")]//text()'
-            )[0]
-            career = tree.xpath('//div[@data-print="Career"]//text()')
-            career = [x for x in zip(career[0::2], career[1::2])]
-            area_of_expertise = tree.xpath(
-                '(//div[contains(@class,"lawyer__expertise")])[1]//a/text()'
-            )
-            bulletin_links = tree.xpath(
-                '//div[@class="bulletin-teaser__content"]/a/@href'
-            )
 
-            bulletins = []
-            if bulletin_links:
-                for link in bulletin_links:
-                    content = await self.get_bulletin(link)
-                    bulletins.append(content)
+            img_link = tree.xpath("//picture/source/@srcset")[0]
 
             publications_raw = await self.query_publications_api(person_id)
             publications = publications_raw["data"]["dd_publications_list"]["result"]
+
+            english_entry = await self.person_api("en", person)
+            german_entry = await self.person_api("de", person)
+            attachments = {}
 
             entry = {
                 "url": url,
                 "person_id": person_id,
                 "person": person,
-                "portrait": portrait,
-                "career": career,
-                "area_of_expertise": area_of_expertise,
-                "bulletins": bulletins,
-                "publications": publications,
+                "EN": english_entry,
+                "DE": german_entry,
             }
-            attachments = {}
 
             fname, fcontent = await self.get_img(img_link, url)
             attachments[fname] = fcontent
@@ -119,6 +103,11 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     def get_name(self, url):
         name = re.search(r"team\/([\w-]+)", url)
         return name.group(1)
+
+    async def person_api(self, lang, name):
+        url = f"https://homburger.ch/_next/data/FVamggN94htdv7GyvegFZ/{lang}/team/{name}.json?lang={lang}&path=team&path={name}"
+        async with self.http_request(url) as resp:
+            return await resp.json()
 
     async def query_publications_api(self, person_id):
         payload = {

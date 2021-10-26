@@ -57,7 +57,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         try:
             tree = html.fromstring(html=response_text)
             person_id_tree = tree.xpath('//script[@id ="__NEXT_DATA__"]/text()')[0]
-            person_id = re.search(r"\"ID\"\:\"(\d+)\"", person_id_tree).group(1)
+            person_id = re.search(r'\"ID\"\:\"(\d+)\"', person_id_tree).group(1)
 
             # entries
             person = self.get_name(url)

@@ -29,7 +29,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         async with self.http_request(start_url) as response:
             tree = html.fromstring(html=await response.text())
         links = tree.xpath('//a[@class="lawyers__lawyer__link"]/@href')
-        for link in links:
+        for link in links[2:3]:
             logger.info(f"Initializing {link=}")
             await self.enqueue_request(link)
 
@@ -56,27 +56,34 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     async def parse(self, url, response_text):
         try:
             tree = html.fromstring(html=response_text)
-            person_id_tree = tree.xpath('//script[@id ="__NEXT_DATA__"]/text()')[0]
-            person_id = re.search(r'\"ID\"\:\"(\d+)\"', person_id_tree).group(1)
 
             # entries
             person = self.get_name(url)
-
             img_link = tree.xpath("//picture/source/@srcset")[0]
+            english_entry = await self.person_api("en", person)
+            german_entry = await self.person_api("de", person)
+
+            en_id = english_entry["dd_person"]["ID"]
+            de_id = german_entry["dd_person"]["ID"]
+
+            en_news = await self.query_news_api(en_id, "en")
+
+            de_news = await self.query_news_api(de_id, "de")
 
             publications_raw = await self.query_publications_api(person_id)
             publications = publications_raw["data"]["dd_publications_list"]["result"]
 
-            english_entry = await self.person_api("en", person)
-            german_entry = await self.person_api("de", person)
             attachments = {}
 
             entry = {
                 "url": url,
-                "person_id": person_id,
+                "EN_id": en_id,
+                "DE_id": de_id,
                 "person": person,
-                "EN": english_entry,
-                "DE": german_entry,
+                "en_news": en_news,
+                "de_news": de_news,
+                "EN_profile_page": english_entry,
+                "DE_profile_page": german_entry,
             }
 
             fname, fcontent = await self.get_img(img_link, url)
@@ -107,13 +114,44 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     async def person_api(self, lang, name):
         url = f"https://homburger.ch/_next/data/FVamggN94htdv7GyvegFZ/{lang}/team/{name}.json?lang={lang}&path=team&path={name}"
         async with self.http_request(url) as resp:
-            return await resp.json()
+            res = await resp.json()
+            result = res["pageProps"]["page"]
+            del result["dd_bulletins_list"]
+            del result["dd_deals_cases_news_list"]
+            del result["dd_publications_list"]
+            return result
 
-    async def query_publications_api(self, person_id):
+    async def query_news_api(self, person_id, lang, cursor=0, complete_result=[]):
+        payload = {
+            "operationName": "deals_cases_news",
+            "variables": {
+                "lang": lang,
+                "expertise": None,
+                "author": [int(person_id)],
+                "search": None,
+                "cursor": str(cursor),
+            },
+            "query": "fragment attachment on WpAttachment {\n  ID\n  post_title\n  post_content\n  post_excerpt\n  attachment_url\n  attachment_focal_point {\n    x\n    y\n    __typename\n  }\n  attachment_metadata {\n    alt_text\n    file\n    width\n    height\n    __typename\n  }\n  __typename\n}\n\nfragment newsDealsCases on NewsDealsCases {\n  ID\n  post_date\n  slug\n  translations {\n    de\n    en\n    __typename\n  }\n  post_date\n  acf {\n    title\n    text\n    type\n    teaser\n    expertise {\n      slug\n      acf {\n        title\n        icon {\n          ...attachment\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    image {\n      ...attachment\n      __typename\n    }\n    authors {\n      ... on NewsDealsCases_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on NewsDealsCases_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              image_close_up {\n                ...attachment\n                __typename\n              }\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery deals_cases_news($lang: String!, $expertise: [Int!], $author: [Int!], $search: String, $cursor: String) {\n  dd_deals_cases_news_list(lang: $lang, pageSize: 6, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...newsDealsCases\n      __typename\n    }\n    __typename\n  }\n}\n",
+        }
+
+        async with self.http_request(
+            "https://api.homburger.ch/", json_data=payload
+        ) as resp:
+
+            result = await resp.json()
+            complete_result.extend(result["data"]["dd_deals_cases_news_list"]["result"])
+
+            if result["data"]["dd_deals_cases_news_list"]["hasMore"] == True:
+                cursor += 6
+                await self.query_news_api(person_id, lang, cursor, complete_result)
+
+            return complete_result
+
+    async def query_publications_api(self, person_id, lang):
         payload = {
             "operationName": "publications_filter",
             "variables": {
-                "lang": "en",
+                "lang": lang,
                 "expertise": None,
                 "author": [int(person_id)],
                 "search": None,

@@ -72,8 +72,8 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             en_bulletins = await self.query_bulletin_api(en_id, "en")
             de_bulletins = await self.query_bulletin_api(de_id, "de", 0, [])
 
-            # publications_raw = await self.query_publications_api(person_id)
-            # publications = publications_raw["data"]["dd_publications_list"]["result"]
+            publications_raw = await self.query_publications_api(en_id)
+            publications = publications_raw["data"]["dd_publications_list"]["result"]
 
             attachments = {}
 
@@ -93,19 +93,19 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             fname, fcontent = await self.get_img(img_link, url)
             attachments[fname] = fcontent
 
-            # for publication in publications:
-            #     title = publication["acf"]["title"]
-            #     try:
-            #         pdf_url = publication["acf"]["document"]["attachment_url"]
-            #         u = pdf_url.split("/")
-            #         true_pdf_link = urljoin(
-            #             "https://homburger.ch/api/ms/", f"{u[0]}/{u[1]}/_/{u[-1]}"
-            #         )
-            #         dl_link, fcontent = await self.get_file(true_pdf_link)
-            #         attachments[dl_link] = fcontent
-            #         logger.info(f"DOWNLOADING . . . {title}")
-            #     except:
-            #         logger.info(f"{title} has no pdf file")
+            for publication in publications:
+                title = publication["acf"]["title"]
+                try:
+                    pdf_url = publication["acf"]["document"]["attachment_url"]
+                    u = pdf_url.split("/")
+                    true_pdf_link = urljoin(
+                        "https://homburger.ch/api/ms/", f"{u[0]}/{u[1]}/_/{u[-1]}"
+                    )
+                    dl_link, fcontent = await self.get_file(true_pdf_link)
+                    attachments[dl_link] = fcontent
+                    logger.info(f"DOWNLOADING . . . {title}")
+                except:
+                    logger.info(f"{title} has no pdf file")
 
             return entry, attachments
         except:
@@ -125,7 +125,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             del result["dd_publications_list"]
             return result
 
-    async def query_news_api(self, person_id, lang, cursor=0, complete_result=[]):
+    async def query_news_api(self, person_id, lang):
         payload = {
             "operationName": "deals_cases_news",
             "variables": {
@@ -133,26 +133,18 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 "expertise": None,
                 "author": [int(person_id)],
                 "search": None,
-                "cursor": str(cursor),
+                "cursor": "0",
             },
-            "query": "fragment attachment on WpAttachment {\n  ID\n  post_title\n  post_content\n  post_excerpt\n  attachment_url\n  attachment_focal_point {\n    x\n    y\n    __typename\n  }\n  attachment_metadata {\n    alt_text\n    file\n    width\n    height\n    __typename\n  }\n  __typename\n}\n\nfragment newsDealsCases on NewsDealsCases {\n  ID\n  post_date\n  slug\n  translations {\n    de\n    en\n    __typename\n  }\n  post_date\n  acf {\n    title\n    text\n    type\n    teaser\n    expertise {\n      slug\n      acf {\n        title\n        icon {\n          ...attachment\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    image {\n      ...attachment\n      __typename\n    }\n    authors {\n      ... on NewsDealsCases_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on NewsDealsCases_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              image_close_up {\n                ...attachment\n                __typename\n              }\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery deals_cases_news($lang: String!, $expertise: [Int!], $author: [Int!], $search: String, $cursor: String) {\n  dd_deals_cases_news_list(lang: $lang, pageSize: 6, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...newsDealsCases\n      __typename\n    }\n    __typename\n  }\n}\n",
+            "query": "fragment attachment on WpAttachment {\n  ID\n  post_title\n  post_content\n  post_excerpt\n  attachment_url\n  attachment_focal_point {\n    x\n    y\n    __typename\n  }\n  attachment_metadata {\n    alt_text\n    file\n    width\n    height\n    __typename\n  }\n  __typename\n}\n\nfragment newsDealsCases on NewsDealsCases {\n  ID\n  post_date\n  slug\n  translations {\n    de\n    en\n    __typename\n  }\n  post_date\n  acf {\n    title\n    text\n    type\n    teaser\n    expertise {\n      slug\n      acf {\n        title\n        icon {\n          ...attachment\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    image {\n      ...attachment\n      __typename\n    }\n    authors {\n      ... on NewsDealsCases_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on NewsDealsCases_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              image_close_up {\n                ...attachment\n                __typename\n              }\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery deals_cases_news($lang: String!, $expertise: [Int!], $author: [Int!], $search: String, $cursor: String) {\n  dd_deals_cases_news_list(lang: $lang, pageSize: 1000, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...newsDealsCases\n      __typename\n    }\n    __typename\n  }\n}\n",
         }
 
         async with self.http_request(
             "https://api.homburger.ch/", json_data=payload
         ) as resp:
-
             result = await resp.json()
-            complete_result.extend(
-                result["data"]["dd_deals_cases_news_list"]["result"])
+            return result["data"]["dd_deals_cases_news_list"]["result"]
 
-            if result["data"]["dd_deals_cases_news_list"]["hasMore"] == True:
-                cursor += 6
-                await self.query_news_api(person_id, lang, cursor, complete_result)
-
-            return complete_result
-
-    async def query_bulletin_api(self, person_id, lang, cursor=0, complete_result=[]):
+    async def query_bulletin_api(self, person_id, lang):
         payload = {
             "operationName": "bulletins",
             "variables": {
@@ -160,23 +152,15 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 "expertise": None,
                 "author": [int(person_id)],
                 "search": None,
-                "cursor": str(cursor)
+                "cursor": "0"
             },
-            "query": "fragment attachment on WpAttachment {\n  ID\n  post_title\n  post_content\n  post_excerpt\n  attachment_url\n  attachment_focal_point {\n    x\n    y\n    __typename\n  }\n  attachment_metadata {\n    alt_text\n    file\n    width\n    height\n    __typename\n  }\n  __typename\n}\n\nfragment bulletin on Bulletins {\n  ID\n  slug\n  post_date\n  acf {\n    introduction\n    title\n    is_mini_series\n    thumbnail {\n      post_title\n      attachment_metadata {\n        alt_text\n        file\n        height\n        width\n        __typename\n      }\n      __typename\n    }\n    authors {\n      ... on Bulletins_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on Bulletins_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    block_list {\n      ... on Bulletins_Acf_block_list_quote_personal {\n        quote_personal {\n          name\n          quote\n          image {\n            ...attachment\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      ... on Bulletins_Acf_block_list_rich_text {\n        rich_text {\n          rich_text\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery bulletins($lang: String!, $expertise: [Int!], $author: [Int!], $search: String, $cursor: String) {\n  dd_bulletins_list(lang: $lang, pageSize: 8, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...bulletin\n      __typename\n    }\n    __typename\n  }\n}\n"}
+            "query": "fragment attachment on WpAttachment {\n  ID\n  post_title\n  post_content\n  post_excerpt\n  attachment_url\n  attachment_focal_point {\n    x\n    y\n    __typename\n  }\n  attachment_metadata {\n    alt_text\n    file\n    width\n    height\n    __typename\n  }\n  __typename\n}\n\nfragment bulletin on Bulletins {\n  ID\n  slug\n  post_date\n  acf {\n    introduction\n    title\n    is_mini_series\n    thumbnail {\n      post_title\n      attachment_metadata {\n        alt_text\n        file\n        height\n        width\n        __typename\n      }\n      __typename\n    }\n    authors {\n      ... on Bulletins_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on Bulletins_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    block_list {\n      ... on Bulletins_Acf_block_list_quote_personal {\n        quote_personal {\n          name\n          quote\n          image {\n            ...attachment\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      ... on Bulletins_Acf_block_list_rich_text {\n        rich_text {\n          rich_text\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery bulletins($lang: String!, $expertise: [Int!], $author: [Int!], $search: String, $cursor: String) {\n  dd_bulletins_list(lang: $lang, pageSize: 1000, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...bulletin\n      __typename\n    }\n    __typename\n  }\n}\n"}
 
         async with self.http_request(
             "https://api.homburger.ch/", json_data=payload
         ) as resp:
-
             result = await resp.json()
-            complete_result.extend(
-                result["data"]["dd_bulletins_list"]["result"])
-
-            if result["data"]["dd_bulletins_list"]["hasMore"] == True:
-                cursor += 8
-                await self.query_bulletin_api(person_id, lang, cursor, complete_result)
-
-            return complete_result
+            return result["data"]["dd_bulletins_list"]["result"]
 
     async def query_publications_api(self, person_id, lang):
         payload = {

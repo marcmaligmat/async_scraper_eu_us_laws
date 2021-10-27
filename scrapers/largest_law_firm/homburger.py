@@ -22,6 +22,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         num_request_workers = 1
         num_results_workers = 1
         http_pause_seconds = 0.1
+        max_results_batch_size = 1
 
     async def initialize(self):
         await super().initialize()
@@ -29,7 +30,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         async with self.http_request(start_url) as response:
             tree = html.fromstring(html=await response.text())
         links = tree.xpath('//a[@class="lawyers__lawyer__link"]/@href')
-        for link in links[2:3]:
+        for link in links:
             logger.info(f"Initializing {link=}")
             await self.enqueue_request(link)
 
@@ -60,23 +61,29 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             # entries
             person = self.get_name(url)
             img_link = tree.xpath("//picture/source/@srcset")[0]
-            english_entry = await self.person_api("en", person)
-            german_entry = await self.person_api("de", person)
+            english_entry = await self.profile_page_api("en", person)
+            german_entry = await self.profile_page_api("de", person)
 
             en_id = english_entry["dd_person"]["ID"]
             de_id = german_entry["dd_person"]["ID"]
 
             en_news = await self.query_news_api(en_id, "en")
-            de_news = await self.query_news_api(de_id, "de", 0, [])
+            de_news = await self.query_news_api(de_id, "de")
 
             en_bulletins = await self.query_bulletin_api(en_id, "en")
-            de_bulletins = await self.query_bulletin_api(de_id, "de", 0, [])
+            de_bulletins = await self.query_bulletin_api(de_id, "de")
 
-            publications_raw = await self.query_publications_api(en_id)
-            publications = publications_raw["data"]["dd_publications_list"]["result"]
+            en_pub = await self.query_publications_api(en_id, "en")
+            de_pub = await self.query_publications_api(de_id, "de")
 
             attachments = {}
+            pub_attachment_en = await self.get_pub_attachment(en_pub, "EN")
+            attachments.update(pub_attachment_en)
 
+            pub_attachment_de = await self.get_pub_attachment(de_pub, "DE")
+            attachments.update(pub_attachment_de)
+            # https://homburger.ch/de/team/vanessa-huber
+            # fix issue on having number at the end of the link
             entry = {
                 "url": url,
                 "EN_id": en_id,
@@ -86,26 +93,14 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 "de_bulletins": de_bulletins,
                 "en_news": en_news,
                 "de_news": de_news,
+                "en_publications": en_pub,
+                "de": de_pub,
                 "EN_profile_page": english_entry,
                 "DE_profile_page": german_entry,
             }
 
             fname, fcontent = await self.get_img(img_link, url)
             attachments[fname] = fcontent
-
-            for publication in publications:
-                title = publication["acf"]["title"]
-                try:
-                    pdf_url = publication["acf"]["document"]["attachment_url"]
-                    u = pdf_url.split("/")
-                    true_pdf_link = urljoin(
-                        "https://homburger.ch/api/ms/", f"{u[0]}/{u[1]}/_/{u[-1]}"
-                    )
-                    dl_link, fcontent = await self.get_file(true_pdf_link)
-                    attachments[dl_link] = fcontent
-                    logger.info(f"DOWNLOADING . . . {title}")
-                except:
-                    logger.info(f"{title} has no pdf file")
 
             return entry, attachments
         except:
@@ -115,7 +110,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         name = re.search(r"team\/([\w-]+)", url)
         return name.group(1)
 
-    async def person_api(self, lang, name):
+    async def profile_page_api(self, lang, name):
         url = f"https://homburger.ch/_next/data/FVamggN94htdv7GyvegFZ/{lang}/team/{name}.json?lang={lang}&path=team&path={name}"
         async with self.http_request(url) as resp:
             res = await resp.json()
@@ -173,13 +168,32 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 "cursor": "0",
                 "pageSize": 1000,
             },
-            "query": "fragment publication on Publications {\n  ID\n  lang\n  slug\n  translations {\n    de\n    en\n    __typename\n  }\n  post_date\n  acf {\n    title\n    text\n    external_link {\n      target\n      title\n      url\n      __typename\n    }\n    document {\n      ID\n      post_title\n      attachment_url\n      __typename\n    }\n    authors {\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery publications_filter($lang: String!, $author: [Int!], $expertise: [Int!], $search: String, $cursor: String, $pageSize: Int) {\n  dd_publications_list(lang: $lang, pageSize: $pageSize, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...publication\n      __typename\n    }\n    __typename\n  }\n}\n",
+            "query": "fragment publication on Publications {\n  ID\n  lang\n  slug\n  translations {\n    de\n    en\n    __typename\n  }\n  post_date\n  acf {\n    title\n    text\n    external_link {\n      target\n      title\n      url\n      __typename\n    }\n    document {\n      ID\n      post_title\n      attachment_url\n      __typename\n    }\n    authors {\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery publications_filter($lang: String!, $author: [Int!], $expertise: [Int!], $search: String, $cursor: String, $pageSize: Int) {\n  dd_publications_list(lang: $lang, pageSize: $pageSize, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...publication\n      __typename\n    }\n    __typename\n  }\n}\n"
         }
 
         async with self.http_request(
             "https://api.homburger.ch/", json_data=payload
         ) as resp:
-            return await resp.json()
+            result = await resp.json()
+            return result["data"]["dd_publications_list"]["result"]
+
+    async def get_pub_attachment(self, publications, lang):
+        publication_attachment = {}
+        for publication in publications:
+            title = publication["acf"]["title"]
+            try:
+                pdf_url = publication["acf"]["document"]["attachment_url"]
+                u = pdf_url.split("/")
+                true_pdf_link = urljoin(
+                    "https://homburger.ch/api/ms/", f"{u[0]}/{u[1]}/_/{u[-1]}"
+                )
+                dl_link, fcontent = await self.get_file(true_pdf_link)
+                publication_attachment[lang + ' ' + dl_link] = fcontent
+                logger.info(f"DOWNLOADING . . . {title}")
+            except:
+                logger.info(f"{title} has no pdf file")
+
+        return publication_attachment
 
     async def get_file(self, dl_link):
         if dl_link is not None:
@@ -194,20 +208,6 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         file_url = dl_link.replace("\\", "")
         async with self.http_request(file_url) as resp:
             return file_url, await resp.read()
-
-    async def get_bulletin(self, dl_link):
-        dl_link = urljoin(self.ROOT_URL, dl_link)
-        dl_url = dl_link.replace("\\", "")
-        async with self.http_request(dl_url) as resp:
-            resp_text = await resp.text()
-            try:
-                tree = html.fromstring(html=resp_text)
-                content = " ".join(
-                    tree.xpath('//section[@class="bulletin__content"]//text()')
-                )
-                return content
-            except:
-                logger.exception(dl_url)
 
 
 def main(_):

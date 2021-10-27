@@ -59,10 +59,14 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             tree = html.fromstring(html=response_text)
 
             # entries
-            person = self.get_name(url)
+            self.person = self.get_name(url)
+
+            # usually the actual name of the lawyer
+            page_title = self.get_page_title(tree)
+
             img_link = tree.xpath("//picture/source/@srcset")[0]
-            english_entry = await self.profile_page_api("en", person)
-            german_entry = await self.profile_page_api("de", person)
+            english_entry = await self.profile_page_api("en", self.person, page_title)
+            german_entry = await self.profile_page_api("de", self.person, page_title)
 
             en_id = english_entry["dd_person"]["ID"]
             de_id = german_entry["dd_person"]["ID"]
@@ -82,13 +86,12 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
             pub_attachment_de = await self.get_pub_attachment(de_pub, "DE")
             attachments.update(pub_attachment_de)
-            # https://homburger.ch/de/team/vanessa-huber
-            # fix issue on having number at the end of the link
+
             entry = {
                 "url": url,
                 "EN_id": en_id,
                 "DE_id": de_id,
-                "person": person,
+                "person": self.person,
                 "en_bulletins": en_bulletins,
                 "de_bulletins": de_bulletins,
                 "en_news": en_news,
@@ -110,14 +113,28 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         name = re.search(r"team\/([\w-]+)", url)
         return name.group(1)
 
-    async def profile_page_api(self, lang, name):
+    def get_page_title(self, tree):
+        """Get actual name of the person"""
+        name = tree.xpath('//title/text()')[0]
+        return name.replace(" ", "-").lower()
+
+    def has_numbers(self, input_str):
+        return any(char.isdigit() for char in input_str)
+
+    async def profile_page_api(self, lang, name, page_title):
+        if lang == 'de' and self.has_numbers(name):
+            name = page_title
+            self.person = page_title
         url = f"https://homburger.ch/_next/data/FVamggN94htdv7GyvegFZ/{lang}/team/{name}.json?lang={lang}&path=team&path={name}"
         async with self.http_request(url) as resp:
             res = await resp.json()
             result = res["pageProps"]["page"]
-            del result["dd_bulletins_list"]
-            del result["dd_deals_cases_news_list"]
-            del result["dd_publications_list"]
+            try:
+                del result["dd_bulletins_list"]
+                del result["dd_deals_cases_news_list"]
+                del result["dd_publications_list"]
+            except:
+                logger.exception(url)
             return result
 
     async def query_news_api(self, person_id, lang):

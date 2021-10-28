@@ -30,7 +30,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         async with self.http_request(start_url) as response:
             tree = html.fromstring(html=await response.text())
         links = tree.xpath('//a[@class="lawyers__lawyer__link"]/@href')
-        for link in links:
+        for link in links[:100]:
             logger.info(f"Initializing {link=}")
             await self.enqueue_request(link)
 

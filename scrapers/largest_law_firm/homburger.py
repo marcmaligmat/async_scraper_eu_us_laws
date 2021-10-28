@@ -30,7 +30,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         async with self.http_request(start_url) as response:
             tree = html.fromstring(html=await response.text())
         links = tree.xpath('//a[@class="lawyers__lawyer__link"]/@href')
-        for link in links[:100]:
+        for link in links:
             logger.info(f"Initializing {link=}")
             await self.enqueue_request(link)
 
@@ -115,14 +115,14 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
     def get_page_title(self, tree):
         """Get actual name of the person"""
-        name = tree.xpath('//title/text()')[0]
+        name = tree.xpath("//title/text()")[0]
         return name.replace(" ", "-").lower()
 
     def has_numbers(self, input_str):
         return any(char.isdigit() for char in input_str)
 
     async def profile_page_api(self, lang, name, page_title):
-        if lang == 'de' and self.has_numbers(name):
+        if lang == "de" and self.has_numbers(name):
             name = page_title
             self.person = page_title
         url = f"https://homburger.ch/_next/data/FVamggN94htdv7GyvegFZ/{lang}/team/{name}.json?lang={lang}&path=team&path={name}"
@@ -164,9 +164,10 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 "expertise": None,
                 "author": [int(person_id)],
                 "search": None,
-                "cursor": "0"
+                "cursor": "0",
             },
-            "query": "fragment attachment on WpAttachment {\n  ID\n  post_title\n  post_content\n  post_excerpt\n  attachment_url\n  attachment_focal_point {\n    x\n    y\n    __typename\n  }\n  attachment_metadata {\n    alt_text\n    file\n    width\n    height\n    __typename\n  }\n  __typename\n}\n\nfragment bulletin on Bulletins {\n  ID\n  slug\n  post_date\n  acf {\n    introduction\n    title\n    is_mini_series\n    thumbnail {\n      post_title\n      attachment_metadata {\n        alt_text\n        file\n        height\n        width\n        __typename\n      }\n      __typename\n    }\n    authors {\n      ... on Bulletins_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on Bulletins_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    block_list {\n      ... on Bulletins_Acf_block_list_quote_personal {\n        quote_personal {\n          name\n          quote\n          image {\n            ...attachment\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      ... on Bulletins_Acf_block_list_rich_text {\n        rich_text {\n          rich_text\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery bulletins($lang: String!, $expertise: [Int!], $author: [Int!], $search: String, $cursor: String) {\n  dd_bulletins_list(lang: $lang, pageSize: 1000, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...bulletin\n      __typename\n    }\n    __typename\n  }\n}\n"}
+            "query": "fragment attachment on WpAttachment {\n  ID\n  post_title\n  post_content\n  post_excerpt\n  attachment_url\n  attachment_focal_point {\n    x\n    y\n    __typename\n  }\n  attachment_metadata {\n    alt_text\n    file\n    width\n    height\n    __typename\n  }\n  __typename\n}\n\nfragment bulletin on Bulletins {\n  ID\n  slug\n  post_date\n  acf {\n    introduction\n    title\n    is_mini_series\n    thumbnail {\n      post_title\n      attachment_metadata {\n        alt_text\n        file\n        height\n        width\n        __typename\n      }\n      __typename\n    }\n    authors {\n      ... on Bulletins_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on Bulletins_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    block_list {\n      ... on Bulletins_Acf_block_list_quote_personal {\n        quote_personal {\n          name\n          quote\n          image {\n            ...attachment\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      ... on Bulletins_Acf_block_list_rich_text {\n        rich_text {\n          rich_text\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery bulletins($lang: String!, $expertise: [Int!], $author: [Int!], $search: String, $cursor: String) {\n  dd_bulletins_list(lang: $lang, pageSize: 1000, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...bulletin\n      __typename\n    }\n    __typename\n  }\n}\n",
+        }
 
         async with self.http_request(
             "https://api.homburger.ch/", json_data=payload
@@ -185,7 +186,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 "cursor": "0",
                 "pageSize": 1000,
             },
-            "query": "fragment publication on Publications {\n  ID\n  lang\n  slug\n  translations {\n    de\n    en\n    __typename\n  }\n  post_date\n  acf {\n    title\n    text\n    external_link {\n      target\n      title\n      url\n      __typename\n    }\n    document {\n      ID\n      post_title\n      attachment_url\n      __typename\n    }\n    authors {\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery publications_filter($lang: String!, $author: [Int!], $expertise: [Int!], $search: String, $cursor: String, $pageSize: Int) {\n  dd_publications_list(lang: $lang, pageSize: $pageSize, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...publication\n      __typename\n    }\n    __typename\n  }\n}\n"
+            "query": "fragment publication on Publications {\n  ID\n  lang\n  slug\n  translations {\n    de\n    en\n    __typename\n  }\n  post_date\n  acf {\n    title\n    text\n    external_link {\n      target\n      title\n      url\n      __typename\n    }\n    document {\n      ID\n      post_title\n      attachment_url\n      __typename\n    }\n    authors {\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_extern {\n        extern {\n          name\n          __typename\n        }\n        __typename\n      }\n      ... on Publications_Acf_authors_list_group_5f1812df4b8d3_authors_intern {\n        intern {\n          ref {\n            slug\n            acf {\n              name\n              surname\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery publications_filter($lang: String!, $author: [Int!], $expertise: [Int!], $search: String, $cursor: String, $pageSize: Int) {\n  dd_publications_list(lang: $lang, pageSize: $pageSize, cursor: $cursor, search: $search, filterBy: {acf__expertise: {in: $expertise}, acf__authors__ref: {in: $author}}) {\n    cursor\n    hasMore\n    result {\n      ...publication\n      __typename\n    }\n    __typename\n  }\n}\n",
         }
 
         async with self.http_request(
@@ -205,7 +206,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                     "https://homburger.ch/api/ms/", f"{u[0]}/{u[1]}/_/{u[-1]}"
                 )
                 dl_link, fcontent = await self.get_file(true_pdf_link)
-                publication_attachment[lang + ' ' + dl_link] = fcontent
+                publication_attachment[lang + " " + dl_link] = fcontent
                 logger.info(f"DOWNLOADING . . . {title}")
             except:
                 logger.info(f"{title} has no pdf file")

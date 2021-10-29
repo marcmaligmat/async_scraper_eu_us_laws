@@ -37,16 +37,16 @@ class KellerhalsCarrardPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scrape
             await self.enqueue_request(link)
 
     async def handle_request(self, request):
-        request_url = urljoin(self.ROOT_URL, request)
-        async with self.http_request(request_url) as response:
-            parsed = await self.parse(request_url, await response.text())
-            if parsed is not None:
-                await self.enqueue_result(parsed)
+        parsed = await self.parse(request)
+        if parsed is not None:
+            await self.enqueue_result(parsed)
 
     async def handle_results(self, results):
         collection = await self.get_db(self.DB_NAME)
         for entry, attachments in results:
-            url = entry["url"]
+            # print(entry)
+            url = entry["EN"]["url"]
+
             async with self.get_doc(collection, url) as doc:
                 doc.update(entry)
             for file_name, file_content in attachments.items():
@@ -61,58 +61,127 @@ class KellerhalsCarrardPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scrape
                 else:
                     logger.debug(f"No file extension {file_name}")
 
-    async def parse(self, url, response_text):
-        try:
-            tree = html.fromstring(html=response_text)
+    async def parse(self, url):
+        person_url = url.split("/")[-1]
+        languages = {
+            "EN": {
+                "link": "/en/people/",
+                "practice_area": "tigkeitsgebiete",
+                "education": "Education",
+                "experience": "Experience / Career",
+                "activities": "Further activities",
+                "publications": "Publications / Presentations",
+            },
+            "DE": {
+                "link": "/de/personen/",
+                "practice_area": "Practice areas",
+                "education": "Ausbildung",
+                "experience": "Werdegang / Karriere",
+                "activities": "tigkeiten",
+                "publications": "Publikationen",
+            },
+            "FR": {
+                "link": "/fr/personnes/",
+                "practice_area": "Domaines d'activités",
+                "education": "Formation",
+                "experience": "Affiliations",
+                "activities": "Autres activités",
+                "publications": "Publications / exposés",
+            },
+            "IT": {
+                "link": "/it/persone/",
+                "practice_area": "Aree di attività",
+                "education": "Formazione",
+                "experience": "Esperienze professionali",
+                "activities": "Altre attività",
+                "publications": "Pubblicazioni / Presentazioni",
+            },
+        }
+        attachments = {}
+        entry = {}
+        for lang, val in languages.items():
 
-            person = tree.xpath('(//span[@class="highlight-mark"])[1]/text()')[0]
+            url = urljoin(self.ROOT_URL, val["link"] + person_url)
 
-            about = tree.xpath('(//span[@class="highlight-mark"])[2]/text()')[0]
-            practice_areas = tree.xpath(
-                '//a[contains(text(),"Practice areas")]/../../div//li/text()'
-            )
-            education = tree.xpath(
-                '//a[contains(text(),"Education")]/../../div//li/text()'
-            )
-            experience = tree.xpath(
-                '//a[contains(text(),"Experience / Career")]/../../div//li/text()'
-            )
-            further_activities = tree.xpath(
-                '//a[contains(text(),"Further activities")]/../../div//li/text()'
-            )
-            publications = tree.xpath(
-                '//a[contains(text(),"Publications / Presentations")]/../../div//li/text()'
-            )
+            async with self.http_request(url) as response:
+                response_text = await response.text()
+            try:
+                tree = html.fromstring(html=response_text)
 
-            # entries
-            entry = {
-                "url": url,
-                "person": person,
-                "about": about,
-                "practice_areas": practice_areas,
-                "education": education,
-                "experience": experience,
-                "further_activities": further_activities,
-                "publications": publications,
-            }
-            attachments = {}
-            cv_link = tree.xpath('//li/a[contains(text(),"Download CV")]/@href')[0]
-            fname, fcontent = await self.get_fcontent(cv_link, url)
-            attachments[fname] = fcontent
+                person = tree.xpath('(//span[@class="highlight-mark"])[1]/text()')[0]
 
-            img_link = tree.xpath('//div[@class="people-image-container"]/img/@src')[0]
-            fname, fcontent = await self.get_fcontent(img_link, url)
-            attachments[fname] = fcontent
+                about = tree.xpath('(//span[@class="highlight-mark"])[2]/text()')[0]
 
-            return entry, attachments
-        except:
-            logger.exception(url)
+                practice_areas = self.remove_empty(
+                    tree.xpath(
+                        '//a[contains(text(),"%s")]/../../div//li//text()'
+                        % val["practice_area"]
+                    )
+                )
+
+                education = tree.xpath(
+                    '//a[contains(text(),"%s")]/../../div//li//text()'
+                    % val["education"]
+                )
+
+                experience = tree.xpath(
+                    '//a[contains(text(),"%s")]/../../div//li//text()'
+                    % val["experience"]
+                )
+                further_activities = tree.xpath(
+                    '//a[contains(text(),"%s")]/../../div//li//text()'
+                    % val["activities"]
+                )
+                publications = tree.xpath(
+                    '//a[contains(text(),"%s")]/../../div//li//text()'
+                    % val["publications"]
+                )
+
+                # entries
+                entry.update(
+                    {
+                        lang: {
+                            "url": url,
+                            "person": person,
+                            "about": about,
+                            "practice_areas": practice_areas,
+                            "education": education,
+                            "experience": experience,
+                            "further_activities": further_activities,
+                            "publications": publications,
+                            # has downloadble file in publications
+                            # https://www.kellerhals-carrard.ch/en/people/thomas-baehler.php
+                        }
+                    }
+                )
+
+                cv_link = tree.xpath('//li/a[contains(text(),"CV")]/@href')[0]
+                fname, fcontent = await self.get_fcontent(cv_link, url)
+                attachments[lang + " " + fname] = fcontent
+
+                img_link = tree.xpath(
+                    '//div[@class="people-image-container"]/img/@src'
+                )[0]
+                fname, fcontent = await self.get_fcontent(img_link, url)
+                attachments[lang + " " + fname] = fcontent
+
+            except:
+                logger.exception(url)
+        return entry, attachments
 
     async def get_fcontent(self, dl_link, url):
         dl_link = urljoin(self.ROOT_URL, dl_link)
         file_url = dl_link.replace("\\", "")
         async with self.http_request(file_url) as resp:
             return file_url, await resp.read()
+
+    def remove_empty(self, lines):
+        new_lines = []
+        for l in lines:
+            if "\t" in l or "\n" in l:
+                continue
+            new_lines.append(l)
+        return new_lines
 
 
 def main(_):

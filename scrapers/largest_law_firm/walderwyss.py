@@ -32,13 +32,13 @@ class WalderwyssPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         links = tree.xpath('//a[@class="lawyers__overview-name"]/@href')
 
         # good example is https://www.walderwyss.com/en/lawyers/roger.ammann [3:4]
-        for link in links[3:4]:
+        for link in links:
             logger.info(f"Initializing {link=}")
             await self.enqueue_request(link)
 
     async def handle_request(self, request):
         request_url = urljoin(self.ROOT_URL, request)
-        name = re.search('\/([^\/]+)$', request).group(1)
+        name = re.search("\/([^\/]+)$", request).group(1)
 
         parsed = await self.parse(request_url, name)
         if parsed is not None:
@@ -60,7 +60,7 @@ class WalderwyssPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     async def parse(self, url, name):
         """
         A list of different URL on different languages, including news and publications button text
-        Change text on news/publications button according to language 
+        Change text on news/publications button according to language
         """
         languages = {
             "EN": {
@@ -82,14 +82,14 @@ class WalderwyssPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 "link": "/it/avvocati/",
                 "news_btn": "Di più News",
                 "pub_btn": "Pubblicazioni",
-            }
+            },
         }
         attachments = {}
         entry = {}
         for lang, val in languages.items():
 
             try:
-                url = urljoin(self.ROOT_URL, val['link']+name)
+                url = urljoin(self.ROOT_URL, val["link"] + name)
                 logger.info(f"Initializing Another Language Link {url}")
                 async with self.http_request(url) as response:
                     response_text = await response.text()
@@ -98,15 +98,16 @@ class WalderwyssPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
                 # entries
                 person = tree.xpath(
-                    '(//h1[@class="main__row__col__name main__row__col__name-lawyer"]/text())[1]')[0]
+                    '(//h1[@class="main__row__col__name main__row__col__name-lawyer"]/text())[1]'
+                )[0]
                 description = tree.xpath(
-                    '(//div[@class="bodytext__richtext"])[1]//text()')
+                    '(//div[@class="bodytext__richtext"])[1]//text()'
+                )
 
-                cv_link = tree.xpath(
-                    '//div[@class="download__container"]/a/@href')[0]
+                cv_link = tree.xpath('//div[@class="download__container"]/a/@href')[0]
 
-                news = await self.get_news(tree, val['news_btn'])
-                publications = await self.get_pub(tree, val['pub_btn'])
+                news = await self.get_news(tree, val["news_btn"])
+                publications = await self.get_pub(tree, val["pub_btn"])
 
                 entry.update(
                     {
@@ -115,9 +116,10 @@ class WalderwyssPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                             "person": person,
                             "description": description,
                             "news": news,
-                            "publications": publications
+                            "publications": publications,
                         }
-                    })
+                    }
+                )
 
                 fname, fcontent = await self.get_file(cv_link)
                 attachments[lang + " " + fname] = fcontent
@@ -170,12 +172,9 @@ class WalderwyssPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             _tree = html.fromstring(html=await response.text())
             title = _tree.xpath('//h1[@class="main__row__col__name"]/text()')
             body = _tree.xpath(
-                '//div[@class="main__row__col__text bodytext__richtext"]//text()[normalize-space()]')
-            news = {
-                "url": news_url,
-                "title": title,
-                "body": body
-            }
+                '//div[@class="main__row__col__text bodytext__richtext"]//text()[normalize-space()]'
+            )
+            news = {"url": news_url, "title": title, "body": body}
             return news
 
     async def get_pub(self, tree, text):
@@ -186,50 +185,43 @@ class WalderwyssPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         """
         pub_list = []
         more_pub = tree.xpath(
-            f'//div[@class="teaser__box"]/a[contains(text(),"{text}")]')
+            f'//div[@class="teaser__box"]/a[contains(text(),"{text}")]'
+        )
 
         if len(more_pub) > 0:
             pub_links = tree.xpath(
-                f'//div[@class="teaser__box"]/a[contains(text(),"{text}")]/@href')
+                f'//div[@class="teaser__box"]/a[contains(text(),"{text}")]/@href'
+            )
             all_pub = urljoin(self.ROOT_URL, pub_links[0])
             async with self.http_request(all_pub) as response:
                 _tree = html.fromstring(html=await response.text())
 
-            pub_articles = _tree.xpath(
-                '//div[@class="overview__publications"]/article')
+            pub_articles = _tree.xpath('//div[@class="overview__publications"]/article')
 
             for article in pub_articles:
                 pub_list.append(await self.parse_pub_article(article))
 
         else:
             pub_li = tree.xpath(
-                f'//h2[@class="teaser__box-title" and text()="{text}"]/../ul//li')
+                f'//h2[@class="teaser__box-title" and text()="{text}"]/../ul//li'
+            )
 
             for li in pub_li:
-                title = li.xpath(
-                    '/div/a[@class="publ__list-item-title"]/text()')
-                description = li.xpath(
-                    '/div[@class="publ__list-item-meta"]//text()')
-                pdf_link = li.xpath('/a/@href')
+                title = li.xpath('/div/a[@class="publ__list-item-title"]/text()')
+                description = li.xpath('/div[@class="publ__list-item-meta"]//text()')
+                pdf_link = li.xpath("/a/@href")
 
-                pub_list.append({
-                    "title": title,
-                    "description": description,
-                    "pdf_link": pdf_link
-                })
+                pub_list.append(
+                    {"title": title, "description": description, "pdf_link": pdf_link}
+                )
         return pub_list
 
     async def parse_pub_article(self, article):
-        title = article.xpath(
-            './div/h2[@class="publications__card-text-title"]/text()')
-        description = article.xpath('./div/div/p//text()')
-        pdf_link = article.xpath('./a/@href')
+        title = article.xpath('./div/h2[@class="publications__card-text-title"]/text()')
+        description = article.xpath("./div/div/p//text()")
+        pdf_link = article.xpath("./a/@href")
 
-        publication = {
-            "title": title,
-            "description": description,
-            "pdf_link": pdf_link
-        }
+        publication = {"title": title, "description": description, "pdf_link": pdf_link}
         return publication
 
 

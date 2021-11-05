@@ -79,7 +79,6 @@ class Scraper:
         query_params: Union[dict, str] = None,
         json_data: dict = None,
         post_data: Union[dict, str, bytes, aiohttp.FormData] = None,
-        files: dict = None,
         headers: dict = None,
     ):
         async with self._http_lock:
@@ -90,7 +89,7 @@ class Scraper:
                 await asyncio.sleep(time_to_pause)
             self._last_http_request = time.time()
 
-        if all(d is None for d in (json_data, post_data, files)):
+        if all(d is None for d in (json_data, post_data)):
             req_kwargs = {
                 'method': 'GET',
                 'url': url,
@@ -103,7 +102,6 @@ class Scraper:
                 'url': url,
                 'json': json_data,
                 'data': post_data,
-                'files': files,
                 'params': query_params,
                 'headers': headers,
             }

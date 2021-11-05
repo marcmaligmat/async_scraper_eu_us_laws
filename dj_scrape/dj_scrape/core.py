@@ -80,6 +80,7 @@ class Scraper:
         json_data: dict = None,
         post_data: Union[dict, str, bytes, aiohttp.FormData] = None,
         files: dict = None,
+        headers: dict = None,
     ):
         async with self._http_lock:
             current_time = time.time()
@@ -94,7 +95,7 @@ class Scraper:
                 'method': 'GET',
                 'url': url,
                 'params': query_params,
-
+                'headers': headers,
             }
         else:
             req_kwargs = {
@@ -104,6 +105,7 @@ class Scraper:
                 'data': post_data,
                 'files': files,
                 'params': query_params,
+                'headers': headers,
             }
 
         yield await self._web_session.request(**req_kwargs)

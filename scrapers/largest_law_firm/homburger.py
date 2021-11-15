@@ -27,19 +27,26 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     async def initialize(self):
         await super().initialize()
         start_url = urljoin(self.ROOT_URL, "/en/team")
-        async with self.http_request(start_url) as response:
-            tree = html.fromstring(html=await response.text())
-        links = tree.xpath('//a[@class="lawyers__lawyer__link"]/@href')
-        for link in links:
-            logger.info(f"Initializing {link=}")
-            await self.enqueue_request(link)
+        await self.enqueue_request(start_url)
 
     async def handle_request(self, request):
-        request_url = urljoin(self.ROOT_URL, request)
-        async with self.http_request(request_url) as response:
-            parsed = await self.parse(request_url, await response.text())
-            if parsed is not None:
-                await self.enqueue_result(parsed)
+        async with self.http_request(request) as response:
+            tree = html.fromstring(html=await response.text())
+        links = tree.xpath('//a[@class="lawyers__lawyer__link"]/@href')
+
+        # added to get the german name of a person in case they are different
+        de_start_url = urljoin(self.ROOT_URL, "/de/team")
+        async with self.http_request(de_start_url) as response:
+            tree = html.fromstring(html=await response.text())
+        de_links = tree.xpath('//a[@class="lawyers__lawyer__link"]/@href')
+
+        for i, link in enumerate(links):
+            logger.info(f"Initializing {link=}")
+            request_url = urljoin(self.ROOT_URL, request)
+            async with self.http_request(request_url) as response:
+                parsed = await self.parse(link, await response.text(), de_links[i])
+                if parsed is not None:
+                    await self.enqueue_result(parsed)
 
     async def handle_results(self, results):
         collection = await self.get_db(self.DB_NAME)
@@ -54,19 +61,20 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 else:
                     logger.debug(f"No file extension {file_name}")
 
-    async def parse(self, url, response_text):
+    async def parse(self, url, response_text, de_link):
         try:
             tree = html.fromstring(html=response_text)
 
             # entries
             self.person = self.get_name(url)
+            de_name = self.get_name(de_link)
 
             # usually the actual name of the lawyer
             page_title = self.get_page_title(tree)
 
             img_link = tree.xpath("//picture/source/@srcset")[0]
             english_entry = await self.profile_page_api("en", self.person, page_title)
-            german_entry = await self.profile_page_api("de", self.person, page_title)
+            german_entry = await self.profile_page_api("de", de_name, page_title)
 
             en_id = english_entry["dd_person"]["ID"]
             de_id = german_entry["dd_person"]["ID"]

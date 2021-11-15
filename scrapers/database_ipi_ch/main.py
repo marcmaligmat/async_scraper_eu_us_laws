@@ -22,7 +22,8 @@ class DatabaseIpiCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     class ScraperSettings(dj_scrape.core.Scraper.ScraperSettings):
         num_request_workers = 1
         num_results_workers = 1
-        http_pause_seconds = 0.1
+        # changed pause second to 1.0 to avoid server disconnection default: 0.1
+        http_pause_seconds = 0.3
         max_results_batch_size = 1
 
     async def initialize(self):
@@ -31,13 +32,15 @@ class DatabaseIpiCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         start_url = urljoin(
             self.ROOT_URL, f"/database/resources/query/fetch?ps={self.PAGE_SIZE}"
         )
+        await self.enqueue_request(start_url)
 
+    async def handle_request(self, start_url):
         headers = {
             "content-type": "application/transit+json",
             "X-IPI-VERSION": "2.2.3",
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36",
         }
-        c = 1
+
         while True:
             try:
                 logger.info(f"Initializing {start_url=}")
@@ -52,22 +55,16 @@ class DatabaseIpiCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                         f"Initializing Cursor: {self.cursor} Page Size: {self.PAGE_SIZE}"
                     )
                     for result in resp["results"]:
-                        await self.enqueue_request(result)
+
+                        parsed = await self.parse(result)
+                        if parsed is not None:
+                            await self.enqueue_result(parsed)
 
                     if not self.cursor:
                         logger.info("Cannot find next cursor, exiting scraper . . .")
                         break
             except:
                 logger.exception(self.cursor, self.PAGE_SIZE)
-
-            if c == 5:
-                break
-            c += 1
-
-    async def handle_request(self, result):
-        parsed = await self.parse(result)
-        if parsed is not None:
-            await self.enqueue_result(parsed)
 
     async def parse(self, result):
         attachments = {}

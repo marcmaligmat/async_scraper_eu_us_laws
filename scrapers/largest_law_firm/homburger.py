@@ -209,7 +209,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 publication_attachment[lang + " " + dl_link] = fcontent
                 logger.info(f"DOWNLOADING . . . {title}")
             except:
-                logger.info(f"{title} has no pdf file")
+                logger.info(f"{title} has no pdf file for publications")
 
         return publication_attachment
 

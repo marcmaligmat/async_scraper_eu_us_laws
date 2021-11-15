@@ -39,7 +39,7 @@ class ZefixCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
     async def handle_request(self, start_url):
         while True:
-            print(f"Offset === {self.OFFSET}")
+            logger.info(f"Offset === {self.OFFSET}")
             json_data = {
                 "name": self.WILDCARD,
                 "languageKey": "en",

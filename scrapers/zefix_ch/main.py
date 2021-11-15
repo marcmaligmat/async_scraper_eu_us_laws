@@ -17,9 +17,9 @@ class ZefixCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     ROOT_URL = "https://www.zefix.ch/"
     DB_NAME = "zefix_ch"
 
-    OFFSET = 39
+    OFFSET = 0
     WILDCARD = "__"
-    MAX_ENTRIES = 1
+    MAX_ENTRIES = 5
 
     HEADERS = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36",
@@ -34,46 +34,42 @@ class ZefixCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
     async def initialize(self):
         await super().initialize()
-        start_url = urljoin(self.ROOT_URL, "/docs/")
-
-        with open("registry_offices.json", "r") as f:
-            registry_offices = list(json.loads(f.read()))
-
-        # for result in registry_offices:
-        #     print(result)
         start_url = "https://www.zefix.ch/ZefixREST/api/v1/firm/search.json"
+        await self.enqueue_request(start_url)
 
-        json_data = {
-            "name": self.WILDCARD,
-            "languageKey": "en",
-            "deletedFirms": "true",
-            "searchType": "exact",
-            "maxEntries": self.MAX_ENTRIES,
-            "offset": self.OFFSET,
-        }
+    async def handle_request(self, start_url):
+        while True:
+            print(f"Offset === {self.OFFSET}")
+            json_data = {
+                "name": self.WILDCARD,
+                "languageKey": "en",
+                "deletedFirms": "true",
+                "searchType": "exact",
+                "maxEntries": self.MAX_ENTRIES,
+                "offset": self.OFFSET,
+            }
 
-        async with self.http_request(
-            start_url, headers=self.HEADERS, json_data=json_data
-        ) as response:
-            resp = await response.json()
-            for result in resp["list"]:
-                await self.enqueue_request(result["cantonalExcerptWeb"])
+            async with self.http_request(
+                start_url, headers=self.HEADERS, json_data=json_data
+            ) as response:
+                resp = await response.json()
+                for result in resp["list"]:
+                    parsed = await self.parse(result["cantonalExcerptWeb"])
+                    if parsed is not None:
+                        await self.enqueue_result(parsed)
 
-    async def handle_request(self, request):
-        parsed = await self.parse(request)
-        if parsed is not None:
-            await self.enqueue_result(parsed)
+            self.OFFSET += self.MAX_ENTRIES
 
     async def parse(self, url):
         table_results = []
         entry = {}
         attachments = {}
+        logger.info(f"Scraping {url=}")
         try:
             if "chregister.ch" in url:
                 async with self.http_request(url, headers=self.HEADERS) as response:
                     nonces = response.headers["Content-Security-Policy"]
                     nonce = nonces.split(" ")[-1].replace("nonce-", "")
-                    # print(nonce)
 
                 tree = html.fromstring(html=await response.text())
                 view_state = tree.xpath(
@@ -99,8 +95,11 @@ class ZefixCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                     "Accept-Language": "en-US,en;q=0.9",
                     "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                 }
+                try:
+                    cookie = response.headers["SET-Cookie"].split(";")[0]
+                except:
+                    cookie = ""
 
-                cookie = response.headers["SET-Cookie"].split(";")[0]
                 _url = re.sub(r"jsession.+", "", str(response.url))
                 final_url = _url + cookie.lower()
                 async with self.http_request(
@@ -151,7 +150,6 @@ class ZefixCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                         "Accept-Language": "en-US,en;q=0.9",
                         "Content-Type": "application/json",
                         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36",
-                        # 'X-XSRF-TOKEN': 'bf16c53b-f1bc-4485-adfc-769be3f9a210'
                     }
                     body = {
                         "rcentId": "",

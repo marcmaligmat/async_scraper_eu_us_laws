@@ -1,4 +1,3 @@
-
 import mimetypes
 import re
 from urllib.parse import urljoin
@@ -18,7 +17,7 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     class ScraperSettings(dj_scrape.core.Scraper.ScraperSettings):
         num_request_workers = 1
         num_results_workers = 1
-        http_pause_seconds = 0.1
+        http_pause_seconds = 0.5
         max_results_batch_size = 1
 
     async def initialize(self):
@@ -31,35 +30,34 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         for link in links:
             if not link.endswith("/"):
                 continue
-            if link.endswith('/Sitemaps/'):
+            if link.endswith("/Sitemaps/"):
                 continue
-            if link.endswith('/Index/'):
+            if link.endswith("/Index/"):
                 continue
 
             if "." in link:
                 continue
+            await self.enqueue_request(link)
 
-            logger.info(f'initializing {link=}')
-            request_url = urljoin(self.ROOT_URL, link)
-            async with self.http_request(request_url) as response:
-                response_text = await response.text()
+    async def handle_request(self, link):
 
-            tree = html.fromstring(html=response_text)
-            file_links = tree.xpath(
-                '//a[contains(@href,"/docs") and text() != "Parent Directory"]/@href'
-            )
+        logger.info(f"initializing {link=}")
+        request_url = urljoin(self.ROOT_URL, link)
+        async with self.http_request(request_url) as response:
+            response_text = await response.text()
 
-            # get distinct links
-            distinct_links = list(dict.fromkeys(
-                map(self.remove_extension, file_links)))
+        tree = html.fromstring(html=response_text)
+        file_links = tree.xpath(
+            '//a[contains(@href,"/docs") and text() != "Parent Directory"]/@href'
+        )
 
-            for distinct_link in distinct_links:
-                await self.enqueue_request(distinct_link)
+        # get distinct links
+        distinct_links = list(dict.fromkeys(map(self.remove_extension, file_links)))
 
-    async def handle_request(self, request):
-        parsed = await self.parse(request)
-        if parsed is not None:
-            await self.enqueue_result(parsed)
+        for distinct_link in distinct_links:
+            parsed = await self.parse(distinct_link)
+            if parsed is not None:
+                await self.enqueue_result(parsed)
 
     async def parse(self, url):
         try:
@@ -75,9 +73,9 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             attachments = {}
 
             attchment_links = [
-                urljoin(self.ROOT_URL, url + '.json'),
-                urljoin(self.ROOT_URL, url + '.html'),
-                urljoin(self.ROOT_URL, url + '.pdf')
+                urljoin(self.ROOT_URL, url + ".json"),
+                urljoin(self.ROOT_URL, url + ".html"),
+                urljoin(self.ROOT_URL, url + ".pdf"),
             ]
 
             for file_link in attchment_links:
@@ -109,7 +107,7 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             return dl_link, await resp.read()
 
     def remove_extension(self, url):
-        return re.sub(r'\.[^\.]+$', '', url)
+        return re.sub(r"\.[^\.]+$", "", url)
 
 
 def main(_):

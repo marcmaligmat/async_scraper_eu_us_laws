@@ -62,9 +62,10 @@ class Bundesblatt(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
             for f in files:
                 if f["type"] == "Manifestation":
-                    file_link = f["attributes"]["isExemplifiedBy"]["rdfs:Resource"]
-                    fname, fcontent = await self.get_file(file_link)
-                    attachments[fname] = fcontent
+                    if "isExemplifiedBy" in f["attributes"].keys():
+                        file_link = f["attributes"]["isExemplifiedBy"]["rdfs:Resource"]
+                        fname, fcontent = await self.get_file(file_link)
+                        attachments[fname] = fcontent
 
             return entry, attachments
         except:

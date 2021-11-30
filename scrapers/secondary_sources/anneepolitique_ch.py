@@ -1,5 +1,9 @@
+# -*- coding: UTF-8 -*-
+
 import mimetypes
 import re
+
+from urllib.parse import unquote
 from urllib.parse import urljoin
 
 from loguru import logger
@@ -12,8 +16,8 @@ from absl import app, flags
 
 class AnneepolitiqueCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     ROOT_URL = "https://anneepolitique.swiss/"
-    DB_NAME = "grundrechte_ch"
-    START_URL = "https://anneepolitique.swiss/articles"
+    DB_NAME = "anneepolitique"
+    PAGE = 1
 
     class ScraperSettings(dj_scrape.core.Scraper.ScraperSettings):
         num_request_workers = 1
@@ -24,44 +28,82 @@ class AnneepolitiqueCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     async def initialize(self):
         await super().initialize()
 
-        async with self.http_request(self.START_URL) as response:
+        while True:
+            url = f"https://anneepolitique.swiss/articles?page={self.PAGE}&start_date=1965-01-01&stop_date=3000-01-01"
+            await self.enqueue_request(url)
+            self.PAGE += 1
+
+    async def handle_request(self, url):
+        async with self.http_request(url) as response:
             tree = html.fromstring(html=await response.text())
-        links = tree.xpath('//li[contains(@class,"sibling")]/a/@href')
+        articles = tree.xpath('//article[@class="article"]')
 
-        # for l in links:
-        #     link = urljoin(self.ROOT_URL, l)
-        #     await self.enqueue_request(link)
-
-    async def handle_request(self, link):
-        logger.info(f"initializing {link=}")
-
-        async with self.http_request(link) as response:
-            response_text = await response.text()
-
-        tree = html.fromstring(html=response_text)
-        parsed = await self.parse(link, tree)
-        if parsed is not None:
-            await self.enqueue_result(parsed)
+        for article in articles:
+            parsed = await self.parse(url, article)
+            if parsed is not None:
+                await self.enqueue_result(parsed)
 
     async def parse(self, url, tree):
         try:
-            content = tree.xpath('//div[@class="box_F1CDCC"]//text()')
-            reference = tree.xpath('//div[@class="ce_text last block"]/p/a/text()')
-            r_url = tree.xpath('//div[@class="ce_text last block"]/p/a/@href')[0]
-            reference_url = urljoin(self.ROOT_URL, r_url)
-            r_content = await self.reference_text(reference_url)
+            attachments = {}
+            name = tree.xpath("./a/@name")[0]
+            logger.info(f"initializing article name {name}")
+
+            summary = tree.xpath("./div/div/p//text()")
+            refer_links = tree.xpath(".//a/@href")
+
+            topic = tree.xpath(
+                './/div[contains(@class,"article-meta")]/div/h3/a/text()'
+            )[0]
+            subtopic = tree.xpath(
+                './/div[contains(@class,"article-meta")]//div[contains(@class,"subtopic")]/h4/a/text()'
+            )[0]
+            sources = tree.xpath('.//ul[@class="references"]//a/@href')
+            catchwords = tree.xpath(
+                './/dl[@class="metadata dl-horizontal"]/dt[contains(text(),"Schlagworte")]/following-sibling::dd[1]/ul//span/text()'
+            )
+            date = tree.xpath(
+                './/dl[@class="metadata dl-horizontal"]/dt[contains(text(),"Datum")]/following-sibling::dd[1]/text()'
+            )
+
+            process_type = tree.xpath(
+                './/dl[@class="metadata dl-horizontal"]/dt[contains(text(),"Prozesstyp")]/following-sibling::dd[1]//text()'
+            )
+
+            bus_nr = tree.xpath(
+                './/dl[@class="metadata dl-horizontal"]/dt[contains(text(),"Geschäftsnr")]/following-sibling::dd[1]//text()'
+            )
+            actor = tree.xpath(
+                './/dl[@class="metadata dl-horizontal"]/dt[contains(text(),"Akteure")]/following-sibling::dd[1]//span/text()'
+            )
+            author = tree.xpath('normalize-space(.//span[@class="author"]/text())')
+            updated_at = tree.xpath(
+                'normalize-space(.//span[@class="last_change_at"]/text())'
+            )
+            for src in sources:
+                # unquoted src
+                u_src = unquote(src)
+                cleaned_src = urljoin(
+                    self.ROOT_URL, u_src.replace("/pdfjs/minimal?file=", "")
+                )
+                fname, fcontent = await self.get_file(cleaned_src)
+                attachments[fname] = fcontent
 
             entry = {
-                "url": url,
-                "content": content,
-                "reference": reference,
-                "reference_url": reference_url,
-                "reference_content": r_content,
+                "name": name,
+                "summary": summary,
+                "refer_links": refer_links,
+                "topic": topic,
+                "subtopic": subtopic,
+                "catchwords": catchwords,
+                "date": date,
+                "sources": sources,
+                "process_type": process_type,
+                "business_nr": bus_nr,
+                "actor": actor,
+                "author": author,
+                "updated_at": updated_at,
             }
-            attachments = {}
-
-            # fname, fcontent = await self.get_file(file_link)
-            # attachments[fname] = fcontent
 
             return entry, attachments
         except:
@@ -70,7 +112,7 @@ class AnneepolitiqueCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     async def handle_results(self, results):
         collection = await self.get_db(self.DB_NAME)
         for entry, attachments in results:
-            _id = entry["url"]
+            _id = entry["name"]
             async with self.get_doc(collection, _id) as doc:
                 doc.update(entry)
 
@@ -86,13 +128,6 @@ class AnneepolitiqueCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         file_url = dl_link.replace("\\", "")
         async with self.http_request(file_url) as resp:
             return dl_link, await resp.read()
-
-    async def reference_text(self, link):
-        async with self.http_request(link) as response:
-            response_text = await response.text()
-
-        _tree = html.fromstring(html=response_text)
-        return _tree.xpath('//div[@class="box_F1CDCC"]//text()')
 
 
 def main(_):

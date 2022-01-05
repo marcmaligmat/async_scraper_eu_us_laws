@@ -63,6 +63,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
     async def parse(self, url, response_text, de_link):
         try:
+            self.img_link = ""
             tree = html.fromstring(html=response_text)
 
             # entries
@@ -72,9 +73,13 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             # usually the actual name of the lawyer
             page_title = self.get_page_title(tree)
 
-            img_link = tree.xpath("//picture/source/@srcset")[0]
             english_entry = await self.profile_page_api("en", self.person, page_title)
             german_entry = await self.profile_page_api("de", de_name, page_title)
+
+            img_ = english_entry["dd_person"]["acf"]["image_medium_shot"][
+                "attachment_url"
+            ]
+            img_link = "https://cms.homburger.ch/wp-content/uploads/" + img_
 
             en_id = english_entry["dd_person"]["ID"]
             de_id = german_entry["dd_person"]["ID"]
@@ -133,7 +138,8 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         if lang == "de" and self.has_numbers(name):
             name = page_title
             self.person = page_title
-        url = f"https://homburger.ch/_next/data/FVamggN94htdv7GyvegFZ/{lang}/team/{name}.json?lang={lang}&path=team&path={name}"
+        url = f"https://homburger.ch/_next/data/gZN3UKFUOQtdEV_C9Z7tM/{lang}/team/{name}.json?lang={lang}&path=team&path={name}"
+
         async with self.http_request(url) as resp:
             res = await resp.json()
             result = res["pageProps"]["page"]
@@ -143,6 +149,7 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 del result["dd_publications_list"]
             except:
                 logger.exception(url)
+
             return result
 
     async def query_news_api(self, person_id, lang):

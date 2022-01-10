@@ -48,7 +48,6 @@ class KellerhalsCarrardPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scrape
         for link in links:
             logger.info(f"Initializing {link=}")
             await self.enqueue_request(link)
-            break
 
     async def handle_request(self, request):
         parsed = await self.parse(request)

@@ -13,6 +13,11 @@ from urllib.parse import urljoin
 
 import re
 
+HEADERS = {
+    "content-type": "text/html",
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36",
+}
+
 
 class KellerhalsCarrardPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     ROOT_URL = "https://www.kellerhals-carrard.ch/"
@@ -27,11 +32,19 @@ class KellerhalsCarrardPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scrape
     async def initialize(self):
         await super().initialize()
         start_url = urljoin(self.ROOT_URL, "/en/people/index.php")
-        async with self.http_request(start_url) as response:
+
+        async with self.http_request(
+            start_url,
+            headers=HEADERS,
+        ) as response:
             tree = html.fromstring(html=await response.text())
+
         links = tree.xpath(
             '//section[@class="people overview"]//span[@class="highlight-mark"]//a[contains(@href,"people")]/@href'
         )
+        if not links:
+            logger.warning("No initial links found, please check xpath expression")
+
         for link in links:
             logger.info(f"Initializing {link=}")
             await self.enqueue_request(link)
@@ -102,8 +115,7 @@ class KellerhalsCarrardPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scrape
         for lang, val in languages.items():
 
             url = urljoin(self.ROOT_URL, val["link"] + person_url)
-
-            async with self.http_request(url) as response:
+            async with self.http_request(url, headers=HEADERS) as response:
                 response_text = await response.text()
             try:
                 tree = html.fromstring(html=response_text)
@@ -167,6 +179,7 @@ class KellerhalsCarrardPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scrape
 
             except:
                 logger.exception(url)
+
         return entry, attachments
 
     async def get_fcontent(self, dl_link, url):

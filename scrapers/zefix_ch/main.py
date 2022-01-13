@@ -1,6 +1,5 @@
 import mimetypes
 import re
-from urllib.parse import urljoin
 
 from loguru import logger
 
@@ -9,8 +8,6 @@ import Hrcintapp
 
 
 from lxml import html
-from absl import app, flags
-import json
 
 
 class ZefixCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
@@ -195,10 +192,10 @@ class ZefixCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                     logger.exception(file_name)
 
 
-def main(_):
+def main():
     scraper = ZefixCH()
     dj_scrape.core.run_scraper(scraper)
 
 
 if __name__ == "__main__":
-    app.run(main)
+    main()

@@ -7,7 +7,6 @@ from loguru import logger
 import dj_scrape.core
 
 from lxml import html
-from absl import app, flags
 
 
 class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
@@ -110,10 +109,10 @@ class EntscheidsucheCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         return re.sub(r"\.[^\.]+$", "", url)
 
 
-def main(_):
+def main():
     scraper = EntscheidsucheCH()
     dj_scrape.core.run_scraper(scraper)
 
 
 if __name__ == "__main__":
-    app.run(main)
+    main()

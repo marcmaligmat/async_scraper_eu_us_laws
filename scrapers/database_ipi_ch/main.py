@@ -1,5 +1,3 @@
-from absl import app, flags
-
 from lxml import html
 
 import dj_scrape.core
@@ -124,10 +122,10 @@ class DatabaseIpiCH(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         return json.loads(cursor)["~#resultmeta"]["~:cursor"]["~#opt"]
 
 
-def main(_):
+def main():
     scraper = DatabaseIpiCH()
     dj_scrape.core.run_scraper(scraper)
 
 
 if __name__ == "__main__":
-    app.run(main)
+    main()

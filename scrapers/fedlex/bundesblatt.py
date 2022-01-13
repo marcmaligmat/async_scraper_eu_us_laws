@@ -7,7 +7,6 @@ from loguru import logger
 import dj_scrape.core
 
 from lxml import html
-from absl import app, flags
 
 
 class Bundesblatt(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
@@ -160,10 +159,10 @@ class Bundesblatt(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         }
 
 
-def main(_):
+def main():
     scraper = Bundesblatt()
     dj_scrape.core.run_scraper(scraper)
 
 
 if __name__ == "__main__":
-    app.run(main)
+    main()

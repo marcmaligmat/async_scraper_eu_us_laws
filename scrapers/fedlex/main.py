@@ -1,13 +1,9 @@
 import mimetypes
-import re
 from urllib.parse import urljoin
 
 from loguru import logger
 
 import dj_scrape.core
-
-from lxml import html
-from absl import app, flags
 
 
 class Fedlex(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
@@ -219,10 +215,10 @@ class Fedlex(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         }
 
 
-def main(_):
+def main():
     scraper = Fedlex()
     dj_scrape.core.run_scraper(scraper)
 
 
 if __name__ == "__main__":
-    app.run(main)
+    main()

@@ -1,7 +1,4 @@
-import json
 import mimetypes
-
-from absl import app, flags
 
 from lxml import html
 
@@ -243,10 +240,10 @@ class HomburgerPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             return file_url, await resp.read()
 
 
-def main(_):
+def main():
     scraper = HomburgerPeople()
     dj_scrape.core.run_scraper(scraper)
 
 
 if __name__ == "__main__":
-    app.run(main)
+    main()

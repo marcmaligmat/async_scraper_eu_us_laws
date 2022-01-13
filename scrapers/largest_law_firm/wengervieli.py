@@ -1,10 +1,3 @@
-import json
-import mimetypes
-
-import requests
-
-from absl import app, flags
-
 from lxml import html
 
 import dj_scrape.core
@@ -12,9 +5,6 @@ import dj_scrape.core
 from loguru import logger
 
 from urllib.parse import urljoin
-
-import re
-
 
 class WengervieliPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     ROOT_URL = "https://wengervieli.ch/"
@@ -150,10 +140,10 @@ class WengervieliPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             return "", ""
 
 
-def main(_):
+def main():
     scraper = WengervieliPeople()
     dj_scrape.core.run_scraper(scraper)
 
 
 if __name__ == "__main__":
-    app.run(main)
+    main()

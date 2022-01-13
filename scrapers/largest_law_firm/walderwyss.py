@@ -1,7 +1,4 @@
-import json
 import mimetypes
-
-from absl import app, flags
 
 from lxml import html
 
@@ -225,10 +222,10 @@ class WalderwyssPeople(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         return publication
 
 
-def main(_):
+def main():
     scraper = WalderwyssPeople()
     dj_scrape.core.run_scraper(scraper)
 
 
 if __name__ == "__main__":
-    app.run(main)
+    main()

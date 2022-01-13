@@ -1,4 +1,3 @@
-from absl import app, flags
 from lxml import html
 
 import dj_scrape.core
@@ -92,10 +91,10 @@ class Takeover_ch(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         return language[1]
 
 
-def main(_):
+def main():
     scraper = Takeover_ch()
     dj_scrape.core.run_scraper(scraper)
 
 
 if __name__ == "__main__":
-    app.run(main)
+    main()

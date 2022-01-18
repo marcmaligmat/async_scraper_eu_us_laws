@@ -34,7 +34,6 @@ class GermanSupremeCourt(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 await self.enqueue_request(
                     "https://juris.bundesgerichtshof.de/cgi-bin/rechtsprechung/" + year
                 )
-                break
 
     async def handle_request(self, request):
 
@@ -62,7 +61,6 @@ class GermanSupremeCourt(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 parsed = await self.parse(nr, link, senates[i], dates[i], see_alsos[i])
                 if parsed is not None:
                     await self.enqueue_result(parsed)
-                    break
 
             has_next_page = tree.xpath(
                 '//td[@class="pagenumber"]//img[contains(@alt,"nächste Seite")]'

@@ -24,56 +24,89 @@ class SupremecourtGov(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
             # get years link
             years = tree.xpath(
-                '//div[@id="ctl00_ctl00_MainEditable_mainContent_upButtons"]//a/@href')
+                '//div[@id="ctl00_ctl00_MainEditable_mainContent_upButtons"]//a/@href'
+            )
             # for year in years[::-1]:
             # remove last link
+
             for year_link in years[:-1]:
                 url = urljoin(
-                    'https://www.supremecourt.gov/opinions/slipopinion/', year_link)
+                    "https://www.supremecourt.gov/opinions/slipopinion/", year_link
+                )
                 logger.info(f"Initializing {url=}")
                 await self.enqueue_request(url)
+
+            # scraping volumes (earlier options)
+            url = "https://www.supremecourt.gov/opinions/USReports.aspx"
+            logger.info(f"Initializing {url=}")
+            await self.enqueue_request(url)
 
     async def handle_request(self, request):
         logger.info(f"Scraping {request}")
         async with self.http_request(request) as response:
             tree = html.fromstring(html=await response.text())
 
-            # use postman to get the exact xpath
-            # chrometool is not enough
-            rows = tree.xpath(
-                '//div[@class="alt-table-responsive"]/table/tr')
+            if request == "https://www.supremecourt.gov/opinions/USReports.aspx":
+                pdf_links = tree.xpath('//div[@class="column3 dslist4"]/ul//li/a/@href')
+                ids = tree.xpath('//div[@class="column3 dslist4"]/ul//li/a/@id')
+                description = tree.xpath(
+                    '//div[@class="column3 dslist4"]/ul//li/a//text()'
+                )
 
-            for row in rows:
-                pdf_link = row.xpath('./td[4]/a/@href')
-                if (pdf_link):
-                    date = row.xpath('./td[2]/text()')[0]
-                    docket_nr = row.xpath('./td[3]/text()')[0]
-
-                    revision = row.xpath('./td[5]/a/@href')
-                    if revision:
-                        revision = urljoin(
-                            'https://www.supremecourt.gov/', revision[0])
-                    else:
-                        revision = None
+                for i, l in enumerate(pdf_links):
+                    link = urljoin("https://www.supremecourt.gov/opinions/", l)
 
                     entry = {
-                        "docket_nr": docket_nr,
-                        "pdf_file": urljoin('https://www.supremecourt.gov/', pdf_link[0]),
-                        "date": date,
-                        "revision": revision
+                        "docket_nr": "Volume " + ids[i],
+                        "id": ids[i],
+                        "pdf_file": link,
+                        "description": description[i],
+                        "revision": None,
                     }
+
                     parsed = await self.parse(entry)
                     if parsed is not None:
                         await self.enqueue_result(parsed)
 
+            else:
+                # use postman to get the exact xpath
+                # chrometool is not enough
+                rows = tree.xpath('//div[@class="alt-table-responsive"]/table/tr')
+
+                for row in rows:
+                    pdf_link = row.xpath("./td[4]/a/@href")
+                    if pdf_link:
+                        date = row.xpath("./td[2]/text()")[0]
+                        docket_nr = row.xpath("./td[3]/text()")[0]
+
+                        revision = row.xpath("./td[5]/a/@href")
+                        if revision:
+                            revision = urljoin(
+                                "https://www.supremecourt.gov/", revision[0]
+                            )
+                        else:
+                            revision = None
+
+                        entry = {
+                            "docket_nr": docket_nr,
+                            "pdf_file": urljoin(
+                                "https://www.supremecourt.gov/", pdf_link[0]
+                            ),
+                            "date": date,
+                            "revision": revision,
+                        }
+                        parsed = await self.parse(entry)
+                        if parsed is not None:
+                            await self.enqueue_result(parsed)
+
     async def parse(self, entry):
         try:
             attachments = {}
-            fname, fcontent = await self.get_file(entry['pdf_file'])
+            fname, fcontent = await self.get_file(entry["pdf_file"])
             attachments[fname] = fcontent
 
-            if entry['revision']:
-                fname, fcontent = await self.get_file(entry['revision'])
+            if entry["revision"]:
+                fname, fcontent = await self.get_file(entry["revision"])
                 attachments[fname] = fcontent
 
             return entry, attachments

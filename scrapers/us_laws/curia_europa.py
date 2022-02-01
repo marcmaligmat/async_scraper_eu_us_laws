@@ -34,7 +34,7 @@ class Curia_Europa(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 # table rows
                 trows = t.xpath('//tr[@class="table_document_ligne"]')
 
-                for trow in trows[:3]:
+                for trow in trows:
                     case = trow.xpath("./td[1]/text()")[0]
 
                     document = " ".join(

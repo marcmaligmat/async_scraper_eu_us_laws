@@ -2,6 +2,7 @@ from lxml import html
 
 import dj_scrape.core
 
+
 from loguru import logger
 
 from urllib.parse import urljoin
@@ -9,7 +10,7 @@ from urllib.parse import urljoin
 # german eng french italian
 
 
-class EurLexEurpa(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
+class EurLexEuropa(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
     ROOT_URL = "https://eur-lex.europa.eu/"
     START_URL = "https://eur-lex.europa.eu/oj/2021/direct-access-search-result.html?ojYearSearch=2021&ojSeriesSearch=ALL&ojSeries=ALL"
     DB_NAME = "eur_lex_europa"
@@ -18,42 +19,56 @@ class EurLexEurpa(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         num_request_workers = 1
         num_results_workers = 1
         http_pause_seconds = 0.5
-        max_results_batch_size = 4
+        max_results_batch_size = 2
 
     async def initialize(self):
         await super().initialize()
-        await self.enqueue_request(self.START_URL)
+
+        async with self.http_request(self.START_URL) as response:
+            t = html.fromstring(html=await response.text())
+
+        years = t.xpath('//select[@id="daily-ojYear"]/option/text()')
+
+        for y in years:
+            logger.debug(f"Scraping for YEAR {y}")
+            url = f"https://eur-lex.europa.eu/oj/2021/direct-access-search-result.html?ojYearSearch={y}&ojSeriesSearch=ALL&ojSeries=ALL"
+            await self.enqueue_request(url)
 
     async def handle_request(self, request):
         try:
-            logger.info(f"Going Page Link: {request}")
             async with self.http_request(request) as response:
-                t = html.fromstring(html=await response.text())
+                _t = html.fromstring(html=await response.text())
 
-                # next_page = t.xpath('//img[@title="Show next document"]/../@href')[0]
-                # # table rows
-                trows = t.xpath("//tbody/tr")
-                # for trow in trows[4:5]:
-                for trow in trows:
-                    try:
+            # # table rows
+            trows = _t.xpath("//tbody/tr")
+            for trow in trows:
 
-                        date = trow.xpath("./td[1]/text()")[0]
+                try:
+                    date = trow.xpath("./td[1]/text()")[0]
+                    # legislation links and parsing
+                    leg_links = trow.xpath("./td[2]/a/@href")
+                    leg_names = trow.xpath("./td[2]/a/text()")
+                    await self.parse_trows(date, leg_links, leg_names)
 
-                        # legislation links and parsing
-                        leg_links = trow.xpath("./td[2]/a/@href")
-                        leg_names = trow.xpath("./td[2]/a/text()")
-                        await self.parse_trows(date, leg_links, leg_names)
+                    # for information and notices
+                    info_links = trow.xpath("./td[3]/a/@href")
+                    info_names = trow.xpath("./td[3]/a/text()")
+                    await self.parse_trows(date, info_links, info_names)
 
-                        # for information and notices
-                        info_links = trow.xpath("./td[3]/a/@href")
-                        info_names = trow.xpath("./td[3]/a/text()")
-                        await self.parse_trows(date, info_links, info_names)
+                except:
+                    logger.exception(f"Error on {date}")
 
-                    except:
-                        logger.exception(f"Error on {date}")
+            # next page
+            try:
+                next_page = _t.xpath('//a[@title="Next Page"]/@href')[0]
+            except:
+                next_page = None
 
-                # if next_page:
-                #     await self.enqueue_request(next_page)
+            if next_page is not None:
+                next_p_link = urljoin(self.ROOT_URL, next_page.replace("./../../", ""))
+                logger.debug(f"Moving to next page {next_p_link}")
+                await self.enqueue_request(next_p_link)
+
         except:
             logger.exception(request)
 
@@ -71,12 +86,18 @@ class EurLexEurpa(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
                 "leg_name": leg_name,
                 "date": date,
             }
-            logger.info(f"Scraping {f_link}")
+            logger.info(f"Scraping {date} {leg_name} {f_link}")
 
             # languages
             langs = ["EN", "FR", "IT", "DE"]
+
             for lang in langs:
-                fname, fcontent = await self.follow_link(f_link, lang)
+                # get PDF files
+                fname, fcontent = await self.follow_link(f_link, lang, "PDF")
+                attachments[fname] = fcontent
+
+                # get HTML files
+                fname, fcontent = await self.follow_link(f_link, lang, "HTML")
                 attachments[fname] = fcontent
 
             parsed = await self.parse(entry, attachments)
@@ -96,12 +117,16 @@ class EurLexEurpa(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
             async with self.get_doc(collection, _id) as doc:
                 doc.update(entry)
             for file_name, file_content in attachments.items():
-
                 try:
-                    await doc.attachment(file_name).save(
-                        file_content, "application/pdf"
-                    )
                     logger.info(f"Downloading {file_name}")
+
+                    if "HTML" in file_name:
+                        file_type = "text/html"
+                    else:
+                        file_type = "application/pdf"
+
+                    await doc.attachment(file_name).save(file_content, file_type)
+
                 except:
                     logger.debug(f"Cannot download {file_name}")
 
@@ -113,15 +138,15 @@ class EurLexEurpa(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
         else:
             return "", ""
 
-    async def follow_link(self, link, lang):
+    async def follow_link(self, link, lang, file_type):
         if link:
-            logger.info(f"Downloading PDF files of {link}")
+            logger.info(f"Try to Download {file_type} files of {link}")
             async with self.http_request(link) as response:
                 t = html.fromstring(html=await response.text())
 
             try:
                 pdf_link = t.xpath(
-                    f'//li/a[contains(@id,"format_language_table_PDF_{lang}")]/@href'
+                    f'//li/a[contains(@id,"format_language_table_{file_type}_{lang}")]/@href'
                 )[0]
                 return await self.get_file(
                     urljoin(self.ROOT_URL, pdf_link.replace("./../../../", ""))
@@ -131,7 +156,7 @@ class EurLexEurpa(dj_scrape.core.CouchDBMixin, dj_scrape.core.Scraper):
 
 
 def main():
-    scraper = EurLexEurpa()
+    scraper = EurLexEuropa()
     dj_scrape.core.run_scraper(scraper)
 
 
